@@ -1,4 +1,4 @@
-# The Four Musketeers: All in One Study Tools for Students
+# The Four Musketeers: Study Buddy (All in One Study Tools for Students)
 
 **Developed by:**  
 Muti Shuman, Tro Hovasapian, Arman Miri, Daniel Kazarian
