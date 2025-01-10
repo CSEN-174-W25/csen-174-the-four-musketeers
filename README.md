@@ -1,75 +1,56 @@
-# The Four Musketeers: AI-powered Study Guide and Flash Cards Generator
+# The Four Musketeers: All in One Study Tools for Students
 
-**A project by:**  
+**Developed by:**  
 Muti Shuman, Tro Hovasapian, Arman Miri, Daniel Kazarian
-(School based assignment for Santa Clara Universty)
-## Table of Contents
 
-- [Overview](#overview)
+## Quick Links
+-------------------------------
+- [About](#about)
 - [Features](#features)
 - [How It Works](#how-it-works)
-- [Usage](#usage)
-- [Contributors](#contributors)
+- [How to Use](#how-to-use)
+- [Our Team](#our-team)
 - [License](#license)
-- [Support](#support)
+- [Get Help](#get-help)
+-------------------------------
+## About
 
-## Overview
-
-*The Four Musketeers* is a ai driven program that...
+Welcome to Study Buddy! We've built this project to make studying easier and more effective. Imagine turning your textbooks, lecture notes, or essays into interactive study guides and flashcards—quickly, easily, and all in one place.... will add more
 
 ---
 
 ## Features
-
-- **AI-driven Content Analysis**: Automatically extracts important information from student documents.
-- **Study Guide Generation**: Converts extracted data into organized, easy-to-understand study guides.
-- **Flashcard Creation**: Generates interactive flashcards based on key concepts for efficient learning.
-- **Web-based Interface**: No installation required—simply use the application through your browser.
-- **Customizable Content**: Users can personalize the study aids based on their preferences and needs.
+(add more later)
 
 ---
 
 ## How It Works
 
-1. **Upload Document**: The user uploads a document (e.g., .txt, .pdf, .docx) to the web platform.
-2. **AI Analysis**: The AI processes the document, extracting important terms, definitions, and concepts.
-3. **Generate Study Materials**: The AI creates a detailed study guide and interactive flashcards.
-4. **Review and Revise**: Users can review the study guide and practice with flashcards, making learning more interactive and efficient.
-
+We’ve kept things simple and intuitive:
+(add more later)
 ---
 
-## Usage
-
-Using *The Four Musketeers* is simple and easy—no installation required!
-
-1. **Visit the Website**: Go to our web app at www.____.com (once published will change this).
-   
-2. **Upload Your Document**: Upload your study material in .txt, .pdf, or .docx format.
-
-3. **Get Your Study Guide and Flashcards**: After processing, the system will generate:
-   - A detailed study guide summarizing key concepts.
-   - Interactive flashcards that you can review and use to test your knowledge.
-
-4. **Start Studying**: Use the study guide and flashcards to improve your understanding and retention of the material.
-
+## How to Use
+(add more later)
 ---
 
-## Contributors
+## Our Team
 
-- **Muti Shuman** -
-- **Tro Hovasapian** - 
-- **Arman Miri** - 
-- **Daniel Kazarian** - 
+- **Muti Shuman** –
+- **Tro Hovasapian** –
+- **Arman Miri** –
+- **Daniel Kazarian** –
 
 ---
 
 ## License
-Pending License. 
+
+Pending
+
 ---
 
-## Support
+## Get Help
 
-If you have any questions, issues, or suggestions, feel free to reach out!
-
+If you need any help, have a question, or run into any issues, just let us know!
 ---
 
