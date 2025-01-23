@@ -1,0 +1,15 @@
+{
+  "name": "study-guide-creator",
+  "version": "1.0.0",
+  "description": "A website to create PDF study guides from input",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "express": "^4.17.1",
+    "html-pdf": "^2.2.0",
+    "axios": "^0.21.1"
+  }
+}
