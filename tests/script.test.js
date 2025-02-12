@@ -4,6 +4,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const fetch = require('node-fetch'); // Add this line
 const html = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
 
 describe('script.js', () => {
