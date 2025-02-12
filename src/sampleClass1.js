@@ -1,27 +1,27 @@
 class SampleClass1 {
     constructor() {
-        this.property = 'default';
+        this.property = 'initial';
     }
 
     method1() {
-        return 'expected value';
+        return `${this.property} processed`;
     }
 
     method2(input) {
-        if (input === 'edge case input') {
-            return 'expected output';
+        if (input === 'edge') {
+            return 'edge case output';
         }
         return 'unexpected output';
     }
 
     method3(input) {
-        if (input === 'invalid input') {
+        if (input === 'invalid') {
             throw new Error('Invalid input');
         }
     }
 
-    updateProperty(newValue) {
-        this.property = newValue;
+    updateProperty(value) {
+        this.property = value;
     }
 
     getProperty() {

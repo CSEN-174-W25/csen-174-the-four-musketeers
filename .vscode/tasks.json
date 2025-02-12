@@ -1,0 +1,15 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "test",
+			"group": "build",
+			"problemMatcher": [],
+			"label": "npm: test",
+			"presentation": {
+				"reveal": "silent"
+			}
+		}
+	]
+}

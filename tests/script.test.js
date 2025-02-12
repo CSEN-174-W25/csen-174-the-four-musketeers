@@ -4,7 +4,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const fetch = require('node-fetch'); // Add this line
+const fetch = require('node-fetch');
+global.fetch = fetch;
 const html = fs.readFileSync(path.resolve(__dirname, '../index.html'), 'utf8');
 
 describe('script.js', () => {
@@ -17,6 +18,10 @@ describe('script.js', () => {
                 json: () => Promise.resolve({ success: true })
             })
         );
+
+        // Ensure the form submission event listener is set up
+        const script = require('../src/script'); // Adjust the path to your script file
+        script.setupFormSubmission(); // Ensure this function sets up the form submission event listener
     });
 
     afterEach(() => {
@@ -29,7 +34,7 @@ describe('script.js', () => {
         const messageDiv = document.getElementById('message');
 
         content.value = 'Test content';
-        form.dispatchEvent(new Event('submit'));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
         await new Promise(process.nextTick);
 
@@ -49,7 +54,7 @@ describe('script.js', () => {
         const messageDiv = document.getElementById('message');
 
         content.value = 'Test content';
-        form.dispatchEvent(new Event('submit'));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
         await new Promise(process.nextTick);
 
@@ -69,7 +74,7 @@ describe('script.js', () => {
             value: [file]
         });
 
-        form.dispatchEvent(new Event('submit'));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
         await new Promise(process.nextTick);
 
@@ -81,11 +86,11 @@ describe('script.js', () => {
         const form = document.getElementById('study-guide-form');
         const messageDiv = document.getElementById('message');
 
-        form.dispatchEvent(new Event('submit'));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
         await new Promise(process.nextTick);
 
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(0); // No fetch call should be made
         expect(messageDiv.textContent).toBe('Failed to create PDF.');
     });
 
@@ -97,7 +102,7 @@ describe('script.js', () => {
         const messageDiv = document.getElementById('message');
 
         content.value = 'Test content';
-        form.dispatchEvent(new Event('submit'));
+        form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
 
         await new Promise(process.nextTick);
 

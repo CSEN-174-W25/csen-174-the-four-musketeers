@@ -14,6 +14,9 @@ app.use(express.static(path.join(__dirname, '../')));
 
 app.post('/api/create-pdf', upload.single('file'), (req, res) => {
     const { content } = req.body;
+    if (!content) {
+        return res.json({ success: false });
+    }
     let html = `<html><body>${content}</body></html>`;
     if (req.file) {
         const filePath = path.join(__dirname, '../', req.file.path);

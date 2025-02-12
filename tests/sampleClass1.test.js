@@ -7,20 +7,22 @@ describe('SampleClass1', () => {
         instance = new SampleClass1();
     });
 
-    test('should initialize instance correctly', () => {
+    test('should initialize instance with initial property value', () => {
         expect(instance).toBeDefined();
+        expect(instance.property).toBe('initial');
     });
 
-    test('should return correct value from method1', () => {
-        expect(instance.method1()).toBe('expected value');
+    test('should return processed value from method1', () => {
+        instance.property = 'test';
+        expect(instance.method1()).toBe('test processed');
     });
 
-    test('should handle edge case input in method2', () => {
-        expect(instance.method2('edge case input')).toBe('expected output');
+    test('should return edge case output for edge input in method2', () => {
+        expect(instance.method2('edge')).toBe('edge case output');
     });
 
     test('should throw error for invalid input in method3', () => {
-        expect(() => instance.method3('invalid input')).toThrow('Invalid input');
+        expect(() => instance.method3('invalid')).toThrow('Invalid input');
     });
 
     test('should update property value correctly', () => {
