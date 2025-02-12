@@ -35,7 +35,7 @@ sampleClass2.test.js
 
 sampleClass1.test.js
     - should initialize instance with initial property value
-    - should return processed value from method1
-    - should return edge case output for edge input in method2
-    - should throw error for invalid input in method3
+    - should return processed value from method3
+    - should return edge case output for edge input in method1
+    - should throw error for invalid input in method2
     - should update property value correctly
