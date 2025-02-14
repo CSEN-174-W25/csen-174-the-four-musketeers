@@ -12,30 +12,23 @@ script.test.js
     - should display failure message when content is missing
     - should display failure message on server error
 
-sampleClass4.test.js
-    - should initialize instance with default property value
+api_response.test.js (in development)
+    - should initialize instance with default property value (retrieving api key)
     - should return processed value from method1
     - should return default output for empty input in method2
     - should throw error for null input in method3
     - should update property value correctly
 
-sampleClass3.test.js
-    - should initialize instance with initial property value
-    - should return processed value from method1
+flashcard_maker.test.js (in development
+    - should handle using api to generate different flash cards
+    - should return processed value from method1_cards
     - should return special output for special case input in method2
     - should throw error for undefined input in method3
     - should update property value correctly
 
-sampleClass2.test.js
+useraccount_database.test.js (implementation pending)
     - should initialize instance with start property value
     - should return processed value from method1
     - should return edge output for edge input in method2
     - should throw error for bad input in method3
-    - should update property value correctly
-
-sampleClass1.test.js
-    - should initialize instance with initial property value
-    - should return processed value from method3
-    - should return edge case output for edge input in method1
-    - should throw error for invalid input in method2
     - should update property value correctly
