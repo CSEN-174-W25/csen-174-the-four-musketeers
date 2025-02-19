@@ -1,0 +1,29 @@
+name: Run JavaScript Unit Tests
+
+on:
+  push:
+    branches:
+      - main  # Change to your default branch if needed
+      - dev   # Add other branches you want to test on
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest  # Runs on a Linux virtual machine
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18  # Use the version matching your project
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run Jest tests
+        run: npm test
