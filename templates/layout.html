@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>StudyMate - {% block title %}{% endblock %}</title>
+  <!-- Bootstrap CSS via CDN -->
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body { padding-top: 70px; }
+    {% if user and user.dark_mode %}
+      /* Simple example dark theme */
+      body {
+        background-color: #333;
+        color: #fff;
+      }
+      .navbar {
+        background-color: #222 !important;
+      }
+      .card {
+        background-color: #444;
+        color: #fff;
+      }
+    {% endif %}
+  </style>
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary fixed-top">
+    <a class="navbar-brand" href="{{ url_for('index') }}">StudyMate</a>
+    <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    
+    <div class="collapse navbar-collapse" id="navbarNav">
+      {% if user %}
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('dashboard') }}">Dashboard</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('create_flashcards') }}">Create Flashcards</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('create_study_guide') }}">Create Study Guide</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('feedback') }}">Feedback</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('my_flashcards') }}">My Flashcards</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('my_study_guides') }}">My Study Guides</a></li>
+        </ul>
+        <ul class="navbar-nav ml-auto">
+          <!-- Dark Mode Toggle -->
+          <li class="nav-item">
+            <form action="{{ url_for('toggle_dark_mode') }}" method="POST" class="form-inline">
+              <button class="btn btn-sm btn-secondary" type="submit">
+                Dark Mode: {{ 'On' if user.dark_mode else 'Off' }}
+              </button>
+            </form>
+          </li>
+          <!-- Logout -->
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('logout') }}">Logout</a>
+          </li>
+        </ul>
+      {% else %}
+        <ul class="navbar-nav ml-auto">
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('login') }}">Login</a></li>
+          <li class="nav-item"><a class="nav-link" href="{{ url_for('signup') }}">Sign Up</a></li>
+        </ul>
+      {% endif %}
+    </div>
+  </nav>
+  
+  <div class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="mt-2">
+          {% for category, msg in messages %}
+            <div class="alert alert-{{ 'danger' if category=='error' else 'success' }}" role="alert">
+              {{ msg }}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+    
+    {% block content %}{% endblock %}
+  </div>
+  
+  <!-- Bootstrap JS & dependencies via CDN -->
+  <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

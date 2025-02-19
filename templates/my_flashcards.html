@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %}My Flashcards{% endblock %}
+{% block content %}
+<h2>My Flashcard Sets</h2>
+{% if flashcard_sets %}
+  <ul class="list-group">
+    {% for fset in flashcard_sets %}
+      <li class="list-group-item">
+        <strong>{{ fset.title }}</strong>
+        {% if fset.file_path %}
+          <br><small>File: {{ fset.filename }}</small>
+          <br>
+          <!-- Download Button -->
+          <a class="btn btn-sm btn-info mt-2" href="{{ url_for('download_flashcard', set_id=fset.id) }}">
+            Download
+          </a>
+        {% endif %}
+        <ul class="mt-2">
+          {% for card in fset.flashcards %}
+            <li>
+              <strong>Q:</strong> {{ card.question }}<br>
+              <strong>A:</strong> {{ card.answer }}
+            </li>
+          {% endfor %}
+        </ul>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>You have no flashcard sets yet. <a href="{{ url_for('create_flashcards') }}">Create one now</a>.</p>
+{% endif %}
+{% endblock %}

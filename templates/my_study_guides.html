@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+{% block title %}My Study Guides{% endblock %}
+{% block content %}
+<h2>My Study Guides</h2>
+{% if study_guides %}
+  <ul class="list-group">
+    {% for guide in study_guides %}
+      <li class="list-group-item">
+        <strong>{{ guide.title }}</strong>
+        {% if guide.file_path %}
+          <br><small>File: {{ guide.filename }}</small>
+          <br>
+          <!-- Download Button -->
+          <a class="btn btn-sm btn-info mt-2" href="{{ url_for('download_guide', guide_id=guide.id) }}">
+            Download
+          </a>
+        {% endif %}
+        <p class="mt-2">{{ guide.content }}</p>
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>You have no study guides yet. <a href="{{ url_for('create_study_guide') }}">Create one now</a>.</p>
+{% endif %}
+{% endblock %}

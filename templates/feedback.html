@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block title %}Submit Feedback{% endblock %}
+{% block content %}
+<h2>Submit Feedback</h2>
+<form method="POST">
+  <div class="form-group">
+    <label for="comment">Comment</label>
+    <textarea class="form-control" id="comment" name="comment" rows="5" required></textarea>
+  </div>
+  <div class="form-group">
+    <label for="rating">Rating (optional, e.g., 1-5)</label>
+    <input class="form-control" id="rating" name="rating" type="number" min="1" max="5">
+  </div>
+  <button type="submit" class="btn btn-success">Submit Feedback</button>
+</form>
+{% endblock %}
