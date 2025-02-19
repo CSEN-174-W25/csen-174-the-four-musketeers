@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study Guide Creator</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header>
+        <h1>Study Guide Creator</h1>
+        <nav>
+            <a href="index.html">Home</a>
+            <a href="about.html">About</a>
+        </nav>
+    </header>
+    <main>
+        <form id="study-guide-form">
+            <label for="content">Enter your study guide content:</label>
+            <textarea id="content" name="content" rows="10" cols="50"></textarea>
+            <label for="file-upload" class="custom-file-upload">
+                <input type="file" id="file-upload" name="file-upload" />
+                Choose File
+            </label>
+            <button type="submit">Create PDF</button>
+        </form>
+        <div id="message"></div>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>
