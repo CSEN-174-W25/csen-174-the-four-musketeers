@@ -11,7 +11,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest  # Runs on a Linux virtual machine
+    runs-on: ubuntu-latest  # Runs on a Linux virual machine
 
     steps:
       - name: Checkout repository
