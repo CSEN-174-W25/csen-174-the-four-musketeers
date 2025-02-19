@@ -7,7 +7,7 @@ function setupFormSubmission() {
         const messageDiv = document.getElementById('message');
 
         if (!content) {
-            messageDiv.textContent = 'Failed to create the PDF.';
+            messageDiv.textContent = 'Failed to create PDF.';
             return;
         }
 
