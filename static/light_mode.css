@@ -1,0 +1,17 @@
+/* Light Mode Styles */
+body {
+    background-color: #ffffff;
+    color: #000;
+  }
+  
+  .navbar {
+    background-color: #007bff;
+  }
+  
+  .card {
+    background-color: #f8f9fa;
+    color: #000;
+  }
+  
+  /* Add any additional light mode styling here */
+  
