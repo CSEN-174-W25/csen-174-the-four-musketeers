@@ -1,5 +1,6 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory
+from flask_dance.contrib.google import make_google_blueprint, google
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
@@ -9,6 +10,16 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'  # Replace with a secure key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///studymate.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+
+google_bp = make_google_blueprint(
+    client_id="YOUR_GOOGLE_CLIENT_ID",
+    client_secret="YOUR_GOOGLE_CLIENT_SECRET",
+    scope=["profile", "email"],
+    redirect_url="/google_login"
+)
+app.register_blueprint(google_bp, url_prefix="/login")
+
 
 # Folder for file uploads
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -89,7 +100,10 @@ def inject_user():
 # -------------------------------
 @app.route('/')
 def index():
+    if 'user_id' in session:
+        return redirect(url_for('dashboard'))
     return render_template('index.html')
+
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -120,7 +134,9 @@ def login():
         session['user_id'] = user.id
         flash('Login successful!', 'success')
         return redirect(url_for('dashboard'))
+    
     return render_template('login.html')
+    
 
 @app.route('/logout')
 def logout():
@@ -136,14 +152,14 @@ def dashboard():
 # -------------------------------
 # CREATE FLASHCARDS
 # -------------------------------
-@app.route('/create_flashcards', methods=['GET', 'POST'])
+@app.route('/create-flashcards', methods=['GET', 'POST'])
 @login_required
 def create_flashcards():
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         if not title:
             flash("Please provide a title for your flashcard set.", "error")
-            return redirect(url_for('create_flashcards'))
+            return redirect(url_for('create-flashcards'))
 
         flashcard_set = FlashcardSet(title=title, user_id=session['user_id'])
         
@@ -175,15 +191,15 @@ def create_flashcards():
 # -------------------------------
 # CREATE STUDY GUIDE
 # -------------------------------
-@app.route('/create_study_guide', methods=['GET', 'POST'])
+@app.route('/create-study-guides', methods=['GET', 'POST'])
 @login_required
-def create_study_guide():
+def create_study_guides():
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         content = request.form.get('content', '').strip()
         if not title or not content:
             flash("Please provide both a title and content for your study guide.", "error")
-            return redirect(url_for('create_study_guide'))
+            return redirect(url_for('create-study-guides'))
 
         study_guide = StudyGuide(title=title, content=content, user_id=session['user_id'])
 
@@ -199,7 +215,7 @@ def create_study_guide():
         db.session.commit()
         flash('Study guide created successfully!', 'success')
         return redirect(url_for('dashboard'))
-    return render_template('create_study_guide.html')
+    return render_template('create_study_guides.html')
 
 # -------------------------------
 # FEEDBACK
@@ -250,10 +266,10 @@ def download_guide(guide_id):
     guide = StudyGuide.query.get_or_404(guide_id)
     if guide.user_id != session['user_id']:
         flash("You do not have permission to download this file.", "error")
-        return redirect(url_for('my_study_guides'))
+        return redirect(url_for('study_guides'))
     if not guide.file_path:
         flash("No file attached to this study guide.", "error")
-        return redirect(url_for('my_study_guides'))
+        return redirect(url_for('study_guides'))
     
     filename = os.path.basename(guide.file_path)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
@@ -264,10 +280,10 @@ def download_flashcard(set_id):
     fset = FlashcardSet.query.get_or_404(set_id)
     if fset.user_id != session['user_id']:
         flash("You do not have permission to download this file.", "error")
-        return redirect(url_for('my_flashcards'))
+        return redirect(url_for('flashcards'))
     if not fset.file_path:
         flash("No file attached to this flashcard set.", "error")
-        return redirect(url_for('my_flashcards'))
+        return redirect(url_for('flashcards'))
     
     filename = os.path.basename(fset.file_path)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
@@ -275,19 +291,19 @@ def download_flashcard(set_id):
 # -------------------------------
 # "My Flashcards" & "My Study Guides"
 # -------------------------------
-@app.route('/my_flashcards')
+@app.route('/flashcards')
 @login_required
-def my_flashcards():
+def flashcards():
     user_id = session['user_id']
     flashcard_sets = FlashcardSet.query.filter_by(user_id=user_id).all()
-    return render_template('my_flashcards.html', flashcard_sets=flashcard_sets)
+    return render_template('flashcards.html', flashcard_sets=flashcard_sets)
 
-@app.route('/my_study_guides')
+@app.route('/study-guides')
 @login_required
-def my_study_guides():
+def study_guides():
     user_id = session['user_id']
     study_guides = StudyGuide.query.filter_by(user_id=user_id).all()
-    return render_template('my_study_guides.html', study_guides=study_guides)
+    return render_template('study_guides.html', study_guides=study_guides)
 
 # -------------------------------
 # Main Entry
@@ -295,4 +311,4 @@ def my_study_guides():
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    app.run(debug=True)
+    app.run()

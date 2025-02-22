@@ -1,6 +1,47 @@
 {% extends "layout.html" %}
+
+{% block header %}
+  <header style="display: flex; justify-content: space-between; align-items: center; width: 100%; padding: 1rem;">
+    <a href="/"><h1 class="display-4" style="margin: 0;">StudyMate</h1></a>
+    <div class="dropdown" style="margin-right: 1rem;">
+      <button class="btn btn-secondary rounded-circle" type="button" id="userDropdown" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false" style="width: 40px; height: 40px; padding: 0; font-size: 1.2rem; line-height: 40px; text-align: center;">
+        {{ user.username[0]|upper }}
+      </button>
+      <div class="dropdown-menu dropdown-menu-right" aria-labelledby="userDropdown">
+        <a class="dropdown-item" href="{{ url_for('logout') }}">Account</a>
+        <a class="dropdown-item text-danger" href="{{ url_for('logout') }}">Logout</a>
+      </div>
+    </div>
+  </header>
+{% endblock %}
+
 {% block title %}Dashboard{% endblock %}
+
 {% block content %}
-<h1>Welcome, {{ user.username }}!</h1>
-<p>Use the navigation bar to create flashcards, study guides, or submit feedback.</p>
+  <div class="container" style="padding-top: 2rem;">
+    <h1 class="mb-4">Welcome, {{ user.username }}!</h1>
+    
+    <div class="card p-4" style="max-width: 400px; margin: auto; background-color: #f8f9fa; border: none; border-radius: 10px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); color: #333;">
+      <div class="mb-3">
+        <a href="{{ url_for('create_flashcards') }}" class="btn btn-success btn-lg btn-block">
+          Create Flashcards
+        </a>
+      </div>
+      <div class="mb-3">
+        <a href="{{ url_for('create_study_guides') }}" class="btn btn-success btn-lg btn-block">
+          Create Study Guides
+        </a>
+      </div>
+      <div class="mb-3">
+        <a href="{{ url_for('flashcards') }}" class="btn btn-primary btn-lg btn-block">
+          View Flashcards
+        </a>
+      </div>
+      <div class="mb-3">
+        <a href="{{ url_for('study_guides') }}" class="btn btn-primary btn-lg btn-block">
+          View Study Guides
+        </a>
+      </div>
+    </div>
+  </div>
 {% endblock %}
