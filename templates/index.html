@@ -1,0 +1,16 @@
+{% extends "layout.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="jumbotron">
+  <h1 class="display-4">Welcome to StudyMate!</h1>
+  <p class="lead">Manage your study materials, create flashcards, and more.</p>
+  <hr class="my-4">
+  {% if not user %}
+    <p>Get started by signing up or logging in.</p>
+    <a class="btn btn-primary btn-lg" href="{{ url_for('signup') }}" role="button">Sign Up</a>
+    <a class="btn btn-secondary btn-lg" href="{{ url_for('login') }}" role="button">Login</a>
+  {% else %}
+    <p>You are logged in as {{ user.username }}. Go to your <a href="{{ url_for('dashboard') }}">Dashboard</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}
