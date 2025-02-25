@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, jsonify
 from flask_dance.contrib.google import make_google_blueprint, google
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -10,16 +10,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'  # Replace with a secure key
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///studymate.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-
-google_bp = make_google_blueprint(
-    client_id="YOUR_GOOGLE_CLIENT_ID",
-    client_secret="YOUR_GOOGLE_CLIENT_SECRET",
-    scope=["profile", "email"],
-    redirect_url="/google_login"
-)
-app.register_blueprint(google_bp, url_prefix="/login")
-
 
 # Folder for file uploads
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -40,15 +30,15 @@ class FlashcardSet(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    flashcards = db.relationship('Flashcard', backref='flashcard_set', lazy=True)
+    flashcards = db.relationship('Flashcard', backref='flashcard_set', lazy=True, cascade="all, delete-orphan")
     file_path = db.Column(db.String(300), nullable=True)
     
     @property
     def filename(self):
-        """Return just the filename portion of file_path (e.g. '003.pdf')."""
         if self.file_path:
             return os.path.basename(self.file_path)
         return None
+
 
 class Flashcard(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -65,7 +55,6 @@ class StudyGuide(db.Model):
     
     @property
     def filename(self):
-        """Return just the filename portion of file_path (e.g. 'mydoc.pdf')."""
         if self.file_path:
             return os.path.basename(self.file_path)
         return None
@@ -83,14 +72,13 @@ def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
         if 'user_id' not in session:
-            flash("You need to be logged in to view that page.", "error")
+            flash("You need to be logged in to view that page.", "danger")
             return redirect(url_for('login'))
         return f(*args, **kwargs)
     return decorated_function
 
 @app.context_processor
 def inject_user():
-    """Inject 'user' into all templates for easy reference."""
     if 'user_id' in session:
         return {'user': User.query.get(session['user_id'])}
     return {'user': None}
@@ -104,16 +92,14 @@ def index():
         return redirect(url_for('dashboard'))
     return render_template('index.html')
 
-
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password'].strip()
         if User.query.filter_by(username=username).first():
-            flash('Username already exists! Please choose another.', 'error')
+            flash('Username already exists! Please choose another.', 'danger')
             return redirect(url_for('signup'))
-
         hashed_pw = generate_password_hash(password)
         new_user = User(username=username, password=hashed_pw)
         db.session.add(new_user)
@@ -129,19 +115,17 @@ def login():
         password = request.form['password'].strip()
         user = User.query.filter_by(username=username).first()
         if not user or not check_password_hash(user.password, password):
-            flash('Invalid username or password.', 'error')
+            flash('Invalid username or password.', 'danger')
             return redirect(url_for('login'))
         session['user_id'] = user.id
         flash('Login successful!', 'success')
         return redirect(url_for('dashboard'))
-    
     return render_template('login.html')
-    
 
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
-    flash('You have been logged out!', 'success')
+    flash('You have been logged out!', 'info')
     return redirect(url_for('index'))
 
 @app.route('/dashboard')
@@ -150,43 +134,117 @@ def dashboard():
     return render_template('dashboard.html')
 
 # -------------------------------
-# CREATE FLASHCARDS
+# CREATE FLASHCARDS - NEW FLOW
 # -------------------------------
-@app.route('/create-flashcards', methods=['GET', 'POST'])
+@app.route('/create-deck', methods=['GET', 'POST'])
 @login_required
-def create_flashcards():
+def create_deck():
     if request.method == 'POST':
         title = request.form.get('title', '').strip()
         if not title:
-            flash("Please provide a title for your flashcard set.", "error")
-            return redirect(url_for('create-flashcards'))
-
-        flashcard_set = FlashcardSet(title=title, user_id=session['user_id'])
+            flash("Please provide a title for your flashcard deck.", "danger")
+            return redirect(url_for('create_deck'))
         
-        # Optional file upload
+        flashcard_set = FlashcardSet(title=title, user_id=session['user_id'])
         file = request.files.get('file')
         if file and file.filename != '':
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             flashcard_set.file_path = file_path
-
+        
         db.session.add(flashcard_set)
         db.session.commit()
+        
+        flash('Deck created successfully!', 'success')
+        return redirect(url_for('add_flashcards', deck_id=flashcard_set.id))
+    return render_template('create_deck.html')
 
-        # Process question/answer fields
-        questions = request.form.getlist('question')
-        answers = request.form.getlist('answer')
-        for q, a in zip(questions, answers):
-            q, a = q.strip(), a.strip()
-            if q and a:
-                new_card = Flashcard(question=q, answer=a, flashcard_set_id=flashcard_set.id)
-                db.session.add(new_card)
-        db.session.commit()
+# -------------------------------
+# UPDATE DECK (Rename)
+# -------------------------------
+@app.route('/update_deck', methods=['POST'])
+@login_required
+def update_deck():
+    deck_id = request.form.get('deck_id')
+    new_title = request.form.get('deck_name', '').strip()
+    if not deck_id or not new_title:
+        return jsonify({'success': False, 'message': 'Deck ID and new title are required.'}), 400
+    deck = FlashcardSet.query.get_or_404(deck_id)
+    if deck.user_id != session['user_id']:
+        return jsonify({'success': False, 'message': 'Not authorized.'}), 403
+    deck.title = new_title
+    db.session.commit()
+    return jsonify({'success': True})
 
-        flash('Flashcard set created successfully!', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('create_flashcards.html')
+# -------------------------------
+# DELETE DECK
+# -------------------------------
+@app.route('/delete_deck/<int:deck_id>', methods=['POST'])
+@login_required
+def delete_deck(deck_id):
+    deck = FlashcardSet.query.get_or_404(deck_id)
+    if deck.user_id != session['user_id']:
+        return jsonify({'success': False, 'message': 'Not authorized.'}), 403
+    db.session.delete(deck)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
+@app.route('/add-flashcards/<int:deck_id>', methods=['GET', 'POST'])
+@login_required
+def add_flashcards(deck_id):
+    deck = FlashcardSet.query.get_or_404(deck_id)
+    if request.method == 'POST':
+        question = request.form.get('question', '').strip()
+        answer = request.form.get('answer', '').strip()
+        if not question or not answer:
+            flash("Question and answer cannot be empty.", "danger")
+        else:
+            new_card = Flashcard(question=question, answer=answer, flashcard_set_id=deck.id)
+            db.session.add(new_card)
+            db.session.commit()
+        return redirect(url_for('add_flashcards', deck_id=deck.id))
+    
+    # Query all flashcards belonging to this deck so far.
+    flashcards = Flashcard.query.filter_by(flashcard_set_id=deck.id).all()
+    return render_template('add_flashcards.html', deck=deck, flashcards=flashcards)
+
+# -------------------------------
+# UPDATE FLASHCARD (AJAX)
+# -------------------------------
+@app.route('/update_flashcard', methods=['POST'])
+@login_required
+def update_flashcard():
+    card_id = request.form.get('card_id')
+    question = request.form.get('question', '').strip()
+    answer = request.form.get('answer', '').strip()
+
+    flashcard = Flashcard.query.get_or_404(card_id)
+    # Check user owns the deck
+    if flashcard.flashcard_set.user_id != session['user_id']:
+        return jsonify({'success': False, 'message': 'Not authorized'}), 403
+    
+    if not question or not answer:
+        return jsonify({'success': False, 'message': 'Both question and answer are required.'}), 400
+    
+    flashcard.question = question
+    flashcard.answer = answer
+    db.session.commit()
+
+    return jsonify({'success': True})
+
+
+@app.route('/delete_flashcard/<int:flashcard_id>', methods=['POST'])
+@login_required
+def delete_flashcard(flashcard_id):
+    flashcard = Flashcard.query.get_or_404(flashcard_id)
+    if flashcard.flashcard_set.user_id != session['user_id']:
+        return jsonify({'success': False, 'message': 'Not authorized'}), 403
+    db.session.delete(flashcard)
+    db.session.commit()
+    return jsonify({'success': True})
+
 
 # -------------------------------
 # CREATE STUDY GUIDE
@@ -198,19 +256,15 @@ def create_study_guides():
         title = request.form.get('title', '').strip()
         content = request.form.get('content', '').strip()
         if not title or not content:
-            flash("Please provide both a title and content for your study guide.", "error")
-            return redirect(url_for('create-study-guides'))
-
+            flash("Please provide both a title and content for your study guide.", "danger")
+            return redirect(url_for('create_study_guides'))
         study_guide = StudyGuide(title=title, content=content, user_id=session['user_id'])
-
-        # Optional file upload
         file = request.files.get('file')
         if file and file.filename != '':
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
             study_guide.file_path = file_path
-
         db.session.add(study_guide)
         db.session.commit()
         flash('Study guide created successfully!', 'success')
@@ -227,17 +281,15 @@ def feedback():
         comment = request.form.get('comment', '').strip()
         rating_str = request.form.get('rating', '').strip()
         if not comment:
-            flash("Please provide feedback text.", "error")
+            flash("Please provide feedback text.", "danger")
             return redirect(url_for('feedback'))
-
         rating = None
         if rating_str:
             try:
                 rating = int(rating_str)
             except ValueError:
-                flash("Rating must be an integer (e.g., 1-5).", "error")
+                flash("Rating must be an integer (e.g., 1-5).", "danger")
                 return redirect(url_for('feedback'))
-
         fb = Feedback(comment=comment, rating=rating, user_id=session['user_id'])
         db.session.add(fb)
         db.session.commit()
@@ -265,12 +317,11 @@ def toggle_dark_mode():
 def download_guide(guide_id):
     guide = StudyGuide.query.get_or_404(guide_id)
     if guide.user_id != session['user_id']:
-        flash("You do not have permission to download this file.", "error")
+        flash("You do not have permission to download this file.", "danger")
         return redirect(url_for('study_guides'))
     if not guide.file_path:
-        flash("No file attached to this study guide.", "error")
+        flash("No file attached to this study guide.", "danger")
         return redirect(url_for('study_guides'))
-    
     filename = os.path.basename(guide.file_path)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
@@ -279,12 +330,11 @@ def download_guide(guide_id):
 def download_flashcard(set_id):
     fset = FlashcardSet.query.get_or_404(set_id)
     if fset.user_id != session['user_id']:
-        flash("You do not have permission to download this file.", "error")
+        flash("You do not have permission to download this file.", "danger")
         return redirect(url_for('flashcards'))
     if not fset.file_path:
-        flash("No file attached to this flashcard set.", "error")
+        flash("No file attached to this flashcard set.", "danger")
         return redirect(url_for('flashcards'))
-    
     filename = os.path.basename(fset.file_path)
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
 
