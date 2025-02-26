@@ -1,0 +1,34 @@
+server.test.js
+    - should create PDF from provided content
+    - should create PDF from provided content and uploaded file
+    - should return failure when content is missing
+    - should handle empty file upload gracefully
+    - should return failure on server error
+
+script.test.js
+    - should display success message on successful PDF creation
+    - should display failure message on PDF creation failure
+    - should handle file upload and display success message
+    - should display failure message when content is missing
+    - should display failure message on server error
+
+api_response.test.js (in development)
+    - should initialize instance with default property value (retrieving api key)
+    - should return processed value from method1
+    - should return default output for empty input in method2
+    - should throw error for null input in method3
+    - should update property value correctly
+
+flashcard_maker.test.js (in development
+    - should handle using api to generate different flash cards
+    - should return processed value from method1_cards
+    - should return special output for special case input in method2
+    - should throw error for undefined input in method3
+    - should update property value correctly
+
+useraccount_database.test.js (implementation pending)
+    - should initialize instance with start property value
+    - should return processed value from method1
+    - should return edge output for edge input in method2
+    - should throw error for bad input in method3
+    - should update property value correctly
