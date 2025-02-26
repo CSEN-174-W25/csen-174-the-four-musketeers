@@ -1,364 +1,387 @@
-import os
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_from_directory, jsonify
-from flask_dance.contrib.google import make_google_blueprint, google
+from flask import Flask, request, jsonify, redirect, url_for, render_template
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
-from werkzeug.utils import secure_filename
+import jwt
+import datetime
+import uuid
 from functools import wraps
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'your_secret_key'  # Replace with a secure key
+app.config['SECRET_KEY'] = 'your_secret_key'  # In production, store this securely!
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///studymate.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-# Folder for file uploads
-app.config['UPLOAD_FOLDER'] = 'uploads'
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
 db = SQLAlchemy(app)
 
-# -------------------------------
-# Database Models
-# -------------------------------
+# ============================
+#         Models
+# ============================
+
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(150), unique=True, nullable=False)
-    password = db.Column(db.String(150), nullable=False)
-    dark_mode = db.Column(db.Boolean, default=False)
-
-class FlashcardSet(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(150), nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    flashcards = db.relationship('Flashcard', backref='flashcard_set', lazy=True, cascade="all, delete-orphan")
-    file_path = db.Column(db.String(300), nullable=True)
-    
-    @property
-    def filename(self):
-        if self.file_path:
-            return os.path.basename(self.file_path)
-        return None
-
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    flashcards = db.relationship('Flashcard', backref='owner', lazy=True)
+    flashcard_sets = db.relationship('FlashcardSet', backref='owner', lazy=True)
+    study_guides = db.relationship('StudyGuide', backref='owner', lazy=True)
 
 class Flashcard(db.Model):
+    # Each flashcard gets a sequential integer ID.
     id = db.Column(db.Integer, primary_key=True)
-    question = db.Column(db.String(300), nullable=False)
-    answer = db.Column(db.String(300), nullable=False)
-    flashcard_set_id = db.Column(db.Integer, db.ForeignKey('flashcard_set.id'), nullable=False)
+    question = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+class FlashcardSet(db.Model):
+    # Each flashcard set gets its own unique UUID.
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
 class StudyGuide(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(150), nullable=False)
+    # Each study guide gets its own unique UUID.
+    id = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    title = db.Column(db.String(100), nullable=False)
     content = db.Column(db.Text, nullable=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    file_path = db.Column(db.String(300), nullable=True)
-    
-    @property
-    def filename(self):
-        if self.file_path:
-            return os.path.basename(self.file_path)
-        return None
-
-class Feedback(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    comment = db.Column(db.Text, nullable=False)
-    rating = db.Column(db.Integer, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
-# -------------------------------
-# Decorators & Context Processor
-# -------------------------------
-def login_required(f):
+# ============================
+#    Authentication Utils
+# ============================
+def token_required(f):
     @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            flash("You need to be logged in to view that page.", "danger")
+    def decorated(*args, **kwargs):
+        token = request.cookies.get("token")  # Retrieve token from cookies
+
+        if not token:
+            return redirect(url_for('login'))  # Redirect to login if no token
+
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(data['user_id'])
+            if not current_user:
+                raise ValueError("User not found")
+        except jwt.ExpiredSignatureError:
+            return redirect(url_for('login'))  # Redirect on expired token
+        except jwt.InvalidTokenError:
+            return redirect(url_for('login'))  # Redirect on invalid token
+        except Exception:
             return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    return decorated_function
 
-@app.context_processor
-def inject_user():
-    if 'user_id' in session:
-        return {'user': User.query.get(session['user_id'])}
-    return {'user': None}
+        return f(current_user, *args, **kwargs)
 
-# -------------------------------
-# Routes
-# -------------------------------
+    return decorated
+
+
+# ============================
+#         Routes
+# ============================
+
 @app.route('/')
 def index():
-    if 'user_id' in session:
-        return redirect(url_for('dashboard'))
-    return render_template('index.html')
+    token = request.cookies.get("token")
+    
+    if token:
+        try:
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            current_user = User.query.get(data['user_id'])
+            if current_user:
+                return redirect(url_for('dashboard'))
+        except jwt.ExpiredSignatureError:
+            pass  # Expired token, stay on index page
+        except jwt.InvalidTokenError:
+            pass  # Invalid token, stay on index page
+        except Exception:
+            pass  # General failure, stay on index page
 
+    return render_template("index.html")
+
+
+# ----- Signup Endpoint (GET and POST) -----
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
-    if request.method == 'POST':
-        username = request.form['username'].strip()
-        password = request.form['password'].strip()
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists! Please choose another.', 'danger')
-            return redirect(url_for('signup'))
-        hashed_pw = generate_password_hash(password)
-        new_user = User(username=username, password=hashed_pw)
+    if request.method == 'GET':
+        token = request.cookies.get("token")
+        if token:
+            try:
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                current_user = User.query.get(data['user_id'])
+                if current_user:
+                    return redirect(url_for('dashboard'))
+            except:
+                pass
+        # Render the signup page (create a signup.html template or modify as needed)
+        return render_template('signup.html')
+    data = request.get_json()
+    if not data or not all(k in data for k in ('username', 'email', 'password')):
+        return jsonify({'message': 'Missing fields'}), 400
+    hashed_password = generate_password_hash(data['password'], method='pbkdf2:sha256')
+    new_user = User(username=data['username'], email=data['email'], password=hashed_password)
+    try:
         db.session.add(new_user)
         db.session.commit()
-        flash('Signup successful! Please log in.', 'success')
-        return redirect(url_for('login'))
-    return render_template('signup.html')
+    except Exception as e:
+        return jsonify({'message': 'User could not be created. Username or email might already exist.'}), 400
+    return jsonify({'message': 'User created successfully!'}), 201
 
+# ----- Login Endpoint (GET and POST) -----
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        username = request.form['username'].strip()
-        password = request.form['password'].strip()
-        user = User.query.filter_by(username=username).first()
-        if not user or not check_password_hash(user.password, password):
-            flash('Invalid username or password.', 'danger')
-            return redirect(url_for('login'))
-        session['user_id'] = user.id
-        flash('Login successful!', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    flash('You have been logged out!', 'info')
-    return redirect(url_for('index'))
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    return render_template('dashboard.html')
-
-# -------------------------------
-# CREATE FLASHCARDS - NEW FLOW
-# -------------------------------
-@app.route('/create-deck', methods=['GET', 'POST'])
-@login_required
-def create_deck():
-    if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        if not title:
-            flash("Please provide a title for your flashcard deck.", "danger")
-            return redirect(url_for('create_deck'))
-        
-        flashcard_set = FlashcardSet(title=title, user_id=session['user_id'])
-        file = request.files.get('file')
-        if file and file.filename != '':
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            flashcard_set.file_path = file_path
-        
-        db.session.add(flashcard_set)
-        db.session.commit()
-        
-        flash('Deck created successfully!', 'success')
-        return redirect(url_for('add_flashcards', deck_id=flashcard_set.id))
-    return render_template('create_deck.html')
-
-# -------------------------------
-# UPDATE DECK (Rename)
-# -------------------------------
-@app.route('/update_deck', methods=['POST'])
-@login_required
-def update_deck():
-    deck_id = request.form.get('deck_id')
-    new_title = request.form.get('deck_name', '').strip()
-    if not deck_id or not new_title:
-        return jsonify({'success': False, 'message': 'Deck ID and new title are required.'}), 400
-    deck = FlashcardSet.query.get_or_404(deck_id)
-    if deck.user_id != session['user_id']:
-        return jsonify({'success': False, 'message': 'Not authorized.'}), 403
-    deck.title = new_title
-    db.session.commit()
-    return jsonify({'success': True})
-
-# -------------------------------
-# DELETE DECK
-# -------------------------------
-@app.route('/delete_deck/<int:deck_id>', methods=['POST'])
-@login_required
-def delete_deck(deck_id):
-    deck = FlashcardSet.query.get_or_404(deck_id)
-    if deck.user_id != session['user_id']:
-        return jsonify({'success': False, 'message': 'Not authorized.'}), 403
-    db.session.delete(deck)
-    db.session.commit()
-    return jsonify({'success': True})
-
-
-@app.route('/add-flashcards/<int:deck_id>', methods=['GET', 'POST'])
-@login_required
-def add_flashcards(deck_id):
-    deck = FlashcardSet.query.get_or_404(deck_id)
-    if request.method == 'POST':
-        question = request.form.get('question', '').strip()
-        answer = request.form.get('answer', '').strip()
-        if not question or not answer:
-            flash("Question and answer cannot be empty.", "danger")
-        else:
-            new_card = Flashcard(question=question, answer=answer, flashcard_set_id=deck.id)
-            db.session.add(new_card)
-            db.session.commit()
-        return redirect(url_for('add_flashcards', deck_id=deck.id))
-    
-    # Query all flashcards belonging to this deck so far.
-    flashcards = Flashcard.query.filter_by(flashcard_set_id=deck.id).all()
-    return render_template('add_flashcards.html', deck=deck, flashcards=flashcards)
-
-# -------------------------------
-# UPDATE FLASHCARD (AJAX)
-# -------------------------------
-@app.route('/update_flashcard', methods=['POST'])
-@login_required
-def update_flashcard():
-    card_id = request.form.get('card_id')
-    question = request.form.get('question', '').strip()
-    answer = request.form.get('answer', '').strip()
-
-    flashcard = Flashcard.query.get_or_404(card_id)
-    # Check user owns the deck
-    if flashcard.flashcard_set.user_id != session['user_id']:
-        return jsonify({'success': False, 'message': 'Not authorized'}), 403
-    
-    if not question or not answer:
-        return jsonify({'success': False, 'message': 'Both question and answer are required.'}), 400
-    
-    flashcard.question = question
-    flashcard.answer = answer
-    db.session.commit()
-
-    return jsonify({'success': True})
-
-
-@app.route('/delete_flashcard/<int:flashcard_id>', methods=['POST'])
-@login_required
-def delete_flashcard(flashcard_id):
-    flashcard = Flashcard.query.get_or_404(flashcard_id)
-    if flashcard.flashcard_set.user_id != session['user_id']:
-        return jsonify({'success': False, 'message': 'Not authorized'}), 403
-    db.session.delete(flashcard)
-    db.session.commit()
-    return jsonify({'success': True})
-
-
-# -------------------------------
-# CREATE STUDY GUIDE
-# -------------------------------
-@app.route('/create-study-guides', methods=['GET', 'POST'])
-@login_required
-def create_study_guides():
-    if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        content = request.form.get('content', '').strip()
-        if not title or not content:
-            flash("Please provide both a title and content for your study guide.", "danger")
-            return redirect(url_for('create_study_guides'))
-        study_guide = StudyGuide(title=title, content=content, user_id=session['user_id'])
-        file = request.files.get('file')
-        if file and file.filename != '':
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-            study_guide.file_path = file_path
-        db.session.add(study_guide)
-        db.session.commit()
-        flash('Study guide created successfully!', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('create_study_guides.html')
-
-# -------------------------------
-# FEEDBACK
-# -------------------------------
-@app.route('/feedback', methods=['GET', 'POST'])
-@login_required
-def feedback():
-    if request.method == 'POST':
-        comment = request.form.get('comment', '').strip()
-        rating_str = request.form.get('rating', '').strip()
-        if not comment:
-            flash("Please provide feedback text.", "danger")
-            return redirect(url_for('feedback'))
-        rating = None
-        if rating_str:
+    if request.method == 'GET':
+        token = request.cookies.get("token")
+        if token:
             try:
-                rating = int(rating_str)
-            except ValueError:
-                flash("Rating must be an integer (e.g., 1-5).", "danger")
-                return redirect(url_for('feedback'))
-        fb = Feedback(comment=comment, rating=rating, user_id=session['user_id'])
-        db.session.add(fb)
-        db.session.commit()
-        flash('Feedback submitted! Thank you.', 'success')
-        return redirect(url_for('dashboard'))
-    return render_template('feedback.html')
+                data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+                current_user = User.query.get(data['user_id'])
+                if current_user:
+                    return redirect(url_for('dashboard'))
+            except:
+                pass
 
-# -------------------------------
-# DARK MODE
-# -------------------------------
-@app.route('/toggle_dark_mode', methods=['POST'])
-@login_required
-def toggle_dark_mode():
-    user = User.query.get(session['user_id'])
-    user.dark_mode = not user.dark_mode
+        return render_template('login.html')
+
+    data = request.get_json()
+    
+    if not data or not all(k in data for k in ('login', 'password')):
+        return jsonify({'message': 'Could not verify'}), 401
+
+    user = User.query.filter((User.username == data['login']) | (User.email == data['login'])).first()
+
+    if not user or not check_password_hash(user.password, data['password']):
+        return jsonify({'message': 'Invalid credentials'}), 401
+
+    token = jwt.encode(
+        {'user_id': user.id, 'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=24)},
+        app.config['SECRET_KEY'],
+        algorithm="HS256"
+    )
+
+    response = jsonify({'token': token})
+    response.set_cookie("token", token, httponly=True)  # Securely set token in cookie
+    return response
+
+@app.route('/logout', methods=['POST'])
+@token_required
+def logout(current_user):
+    response = jsonify({'message': 'Logged out successfully!'})
+    response.delete_cookie("token")
+    return response, 200
+
+
+@app.route('/dashboard', methods=['GET'])
+@token_required
+def dashboard(current_user):
+    return render_template('dashboard.html', user=current_user)
+
+@app.route('/get-user-info', methods=['GET'])
+@token_required
+def get_user_info(current_user):
+    return jsonify({'username': current_user.username})
+
+# ============================
+#     Flashcard Endpoints
+# ============================
+@app.route('/flashcards', methods=['GET'])
+@token_required
+def get_flashcards(current_user):
+    flashcard_sets = FlashcardSet.query.filter_by(user_id=current_user.id).all()
+    flashcards = Flashcard.query.filter_by(user_id=current_user.id).all()
+    
+    return render_template('flashcards.html', flashcard_sets=flashcard_sets, flashcards=flashcards, user=current_user)
+
+
+@app.route('/flashcards', methods=['POST'])
+@token_required
+def create_flashcard(current_user):
+    data = request.get_json()
+    if not data or not all(k in data for k in ('question', 'answer')):
+        return jsonify({'message': 'Missing question or answer'}), 400
+    new_card = Flashcard(question=data['question'], answer=data['answer'], owner=current_user)
+    db.session.add(new_card)
     db.session.commit()
-    flash('Display settings updated!', 'success')
-    return redirect(url_for('dashboard'))
+    return jsonify({'message': 'Flashcard created!', 'flashcard_id': new_card.id}), 201
 
-# -------------------------------
-# DOWNLOAD ROUTES
-# -------------------------------
-@app.route('/download_guide/<int:guide_id>')
-@login_required
-def download_guide(guide_id):
-    guide = StudyGuide.query.get_or_404(guide_id)
-    if guide.user_id != session['user_id']:
-        flash("You do not have permission to download this file.", "danger")
-        return redirect(url_for('study_guides'))
-    if not guide.file_path:
-        flash("No file attached to this study guide.", "danger")
-        return redirect(url_for('study_guides'))
-    filename = os.path.basename(guide.file_path)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+@app.route('/flashcards/<int:flashcard_id>', methods=['GET'])
+@token_required
+def get_flashcard(current_user, flashcard_id):
+    card = Flashcard.query.filter_by(id=flashcard_id, user_id=current_user.id).first()
+    if not card:
+        return jsonify({'message': 'Flashcard not found'}), 404
+    card_data = {
+        'id': card.id,
+        'question': card.question,
+        'answer': card.answer,
+        'created_at': card.created_at
+    }
+    return jsonify({'flashcard': card_data})
 
-@app.route('/download_flashcard/<int:set_id>')
-@login_required
-def download_flashcard(set_id):
-    fset = FlashcardSet.query.get_or_404(set_id)
-    if fset.user_id != session['user_id']:
-        flash("You do not have permission to download this file.", "danger")
-        return redirect(url_for('flashcards'))
-    if not fset.file_path:
-        flash("No file attached to this flashcard set.", "danger")
-        return redirect(url_for('flashcards'))
-    filename = os.path.basename(fset.file_path)
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename, as_attachment=True)
+@app.route('/flashcards/<int:flashcard_id>', methods=['PUT'])
+@token_required
+def update_flashcard(current_user, flashcard_id):
+    card = Flashcard.query.filter_by(id=flashcard_id, user_id=current_user.id).first()
+    if not card:
+        return jsonify({'message': 'Flashcard not found'}), 404
+    data = request.get_json()
+    if 'question' in data:
+        card.question = data['question']
+    if 'answer' in data:
+        card.answer = data['answer']
+    db.session.commit()
+    return jsonify({'message': 'Flashcard updated!'})
 
-# -------------------------------
-# "My Flashcards" & "My Study Guides"
-# -------------------------------
-@app.route('/flashcards')
-@login_required
-def flashcards():
-    user_id = session['user_id']
-    flashcard_sets = FlashcardSet.query.filter_by(user_id=user_id).all()
-    return render_template('flashcards.html', flashcard_sets=flashcard_sets)
+@app.route('/flashcards/<int:flashcard_id>', methods=['DELETE'])
+@token_required
+def delete_flashcard(current_user, flashcard_id):
+    card = Flashcard.query.filter_by(id=flashcard_id, user_id=current_user.id).first()
+    if not card:
+        return jsonify({'message': 'Flashcard not found'}), 404
+    db.session.delete(card)
+    db.session.commit()
+    return jsonify({'message': 'Flashcard deleted!'})
 
-@app.route('/study-guides')
-@login_required
-def study_guides():
-    user_id = session['user_id']
-    study_guides = StudyGuide.query.filter_by(user_id=user_id).all()
-    return render_template('study_guides.html', study_guides=study_guides)
+# ============================
+#   Flashcard Set Endpoints
+# ============================
+@app.route('/flashcard-sets', methods=['GET'])
+@token_required
+def get_flashcard_sets(current_user):
+    sets = FlashcardSet.query.filter_by(user_id=current_user.id).all()
+    output = []
+    for s in sets:
+        set_data = {
+            'id': s.id,
+            'name': s.name,
+            'description': s.description,
+            'created_at': s.created_at
+        }
+        output.append(set_data)
+    return jsonify({'flashcard_sets': output})
 
-# -------------------------------
-# Main Entry
-# -------------------------------
+@app.route('/flashcard-sets', methods=['POST'])
+@token_required
+def create_flashcard_set(current_user):
+    data = request.get_json()
+    if not data or 'name' not in data:
+        return jsonify({'message': 'Missing name field'}), 400
+    new_set = FlashcardSet(name=data['name'], description=data.get('description', ''), owner=current_user)
+    db.session.add(new_set)
+    db.session.commit()
+    return jsonify({'message': 'Flashcard set created!', 'set_id': new_set.id}), 201
+
+@app.route('/flashcard-sets/<string:set_id>', methods=['GET'])
+@token_required
+def get_flashcard_set(current_user, set_id):
+    s = FlashcardSet.query.filter_by(id=set_id, user_id=current_user.id).first()
+    if not s:
+        return jsonify({'message': 'Flashcard set not found'}), 404
+    set_data = {
+        'id': s.id,
+        'name': s.name,
+        'description': s.description,
+        'created_at': s.created_at
+    }
+    return jsonify({'flashcard_set': set_data})
+
+@app.route('/flashcard-sets/<string:set_id>', methods=['PUT'])
+@token_required
+def update_flashcard_set(current_user, set_id):
+    s = FlashcardSet.query.filter_by(id=set_id, user_id=current_user.id).first()
+    if not s:
+        return jsonify({'message': 'Flashcard set not found'}), 404
+    data = request.get_json()
+    if 'name' in data:
+        s.name = data['name']
+    if 'description' in data:
+        s.description = data['description']
+    db.session.commit()
+    return jsonify({'message': 'Flashcard set updated!'})
+
+@app.route('/flashcard-sets/<string:set_id>', methods=['DELETE'])
+@token_required
+def delete_flashcard_set(current_user, set_id):
+    s = FlashcardSet.query.filter_by(id=set_id, user_id=current_user.id).first()
+    if not s:
+        return jsonify({'message': 'Flashcard set not found'}), 404
+    db.session.delete(s)
+    db.session.commit()
+    return jsonify({'message': 'Flashcard set deleted!'})
+
+# ============================
+#    Study Guide Endpoints
+# ============================
+@app.route('/study-guides', methods=['GET'])
+@token_required
+def get_study_guides(current_user):
+    guides = StudyGuide.query.filter_by(user_id=current_user.id).all()
+    output = []
+    for guide in guides:
+        guide_data = {
+            'id': guide.id,
+            'title': guide.title,
+            'content': guide.content,
+            'created_at': guide.created_at
+        }
+        output.append(guide_data)
+    return jsonify({'study_guides': output})
+
+@app.route('/study-guides', methods=['POST'])
+@token_required
+def create_study_guide(current_user):
+    data = request.get_json()
+    if not data or not all(k in data for k in ('title', 'content')):
+        return jsonify({'message': 'Missing title or content'}), 400
+    new_guide = StudyGuide(title=data['title'], content=data['content'], owner=current_user)
+    db.session.add(new_guide)
+    db.session.commit()
+    return jsonify({'message': 'Study guide created!', 'guide_id': new_guide.id}), 201
+
+@app.route('/study-guides/<string:guide_id>', methods=['GET'])
+@token_required
+def get_study_guide(current_user, guide_id):
+    guide = StudyGuide.query.filter_by(id=guide_id, user_id=current_user.id).first()
+    if not guide:
+        return jsonify({'message': 'Study guide not found'}), 404
+    guide_data = {
+        'id': guide.id,
+        'title': guide.title,
+        'content': guide.content,
+        'created_at': guide.created_at
+    }
+    return jsonify({'study_guide': guide_data})
+
+@app.route('/study-guides/<string:guide_id>', methods=['PUT'])
+@token_required
+def update_study_guide(current_user, guide_id):
+    guide = StudyGuide.query.filter_by(id=guide_id, user_id=current_user.id).first()
+    if not guide:
+        return jsonify({'message': 'Study guide not found'}), 404
+    data = request.get_json()
+    if 'title' in data:
+        guide.title = data['title']
+    if 'content' in data:
+        guide.content = data['content']
+    db.session.commit()
+    return jsonify({'message': 'Study guide updated!'})
+
+@app.route('/study-guides/<string:guide_id>', methods=['DELETE'])
+@token_required
+def delete_study_guide(current_user, guide_id):
+    guide = StudyGuide.query.filter_by(id=guide_id, user_id=current_user.id).first()
+    if not guide:
+        return jsonify({'message': 'Study guide not found'}), 404
+    db.session.delete(guide)
+    db.session.commit()
+    return jsonify({'message': 'Study guide deleted!'})
+
+# ============================
+#         Main
+# ============================
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()
-    app.run()
+        db.create_all()  # Create tables if they don't exist
+    app.run(debug=False)

@@ -1,650 +1,100 @@
-{% extends "layout.html" %}
-{% block title %}My Flashcards{% endblock %}
+{% extends 'layout.html' %}
+
+{% block title %}Flashcards - StudyMate{% endblock %}
+
+{% block body_class %}flashcards-page{% endblock %} 
+
 {% block content %}
-<style>
-  @import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css');
+<div class="container">
+    <h1 class="mt-4 text-center">Manage Your Flashcards</h1>
+    <p class="lead text-center mb-4">Create, Update, and Review Your Flashcards.</p>
 
-  /* Outer container to center content */
-  .outer-container {
-    max-width: 1200px;
-    margin: 0 auto;
-    text-align: center;
-  }
-  /* Two-column layout */
-  .fixed-container {
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    gap: 2rem;
-    margin: 2rem 0;
-  }
-  /* Shared styling for both menus */
-  .fixed-menu {
-    background-color: #f8f9fa;
-    width: 450px;
-    height: 500px;
-    border-radius: 8px;
-    padding: 1rem;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-  }
-  .scrollable {
-    overflow-y: auto;
-  }
-  /* Left column: Deck list */
-  .deck-list {
-    width: 300px;
-    height: 500px;
-    border-radius: 8px;
-    padding: 1rem;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    overflow-y: auto;
-    background-color: #f8f9fa;
-    text-align: left;
-  }
-  .deck-item {
-    cursor: pointer;
-    padding: 0.5rem;
-    margin-bottom: 0.5rem;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    transition: background-color 0.3s;
-  }
-  .deck-item:hover {
-    background-color: rgb(199, 198, 198);
-  }
-  .deck-item.active {
-    background-color: #6c757d;
-  }
-  /* Right column: Deck details */
-  .deck-details {
-    width: 500px;
-    height: 500px;
-    border-radius: 8px;
-    padding: 1rem;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    overflow-y: auto;
-    background-color: #ffffff;
-    display: none;
-    position: relative;
-  }
-  /* Deck header styling */
-  .deck-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .deck-header-left {
-    display: flex;
-    align-items: center;
-  }
-  .deck-header-left h4 {
-    margin: 0;
-  }
-  .deck-header-left button {
-    background: none;
-    border: none;
-    color: inherit;
-    margin-left: 5px;
-    cursor: pointer;
-  }
-  .deck-header-right button {
-    background: none;
-    border: none;
-    color: red;  /* Trash button appears red */
-    cursor: pointer;
-  }
-  /* Study and shuffle buttons container, centered */
-  .deck-actions {
-    text-align: center;
-    margin-top: 10px;
-  }
-  /* Flashcard list styling */
-  .flashcard-list {
-    margin-top: 1rem;
-    text-align: left;
-  }
-  .card-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    border-bottom: 1px solid #ccc;
-  }
-  .card-item .flashcard-text {
-    flex: 1;
-    text-align: left;
-  }
-  .card-item .flashcard-text strong,
-  .card-item .flashcard-text span {
-    display: block;
-  }
-  .card-item button {
-    background: none;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-  }
-  /* Dark Mode Styles */
-  body.dark-mode .fixed-menu,
-  body.dark-mode .deck-list {
-    background-color: #2c2c2c;
-    color: #eee;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-  }
-  body.dark-mode .deck-item {
-    border-color: #555;
-    background-color: #333;
-    color: #eee;
-  }
-  body.dark-mode .deck-item:hover {
-    background-color: #444;
-  }
-  body.dark-mode .deck-item.active {
-    background-color: #555;
-  }
-  body.dark-mode .deck-details {
-    background-color: #2c2c2c;
-    color: #eee;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
-  }
-  body.dark-mode .flashcard-list .card-item {
-    border-bottom: 1px solid #555;
-  }
+    <!-- Floating + Button -->
+    <button id="addFlashcardSet" class="floating-add-btn" title="Create a new flashcard set">
+        <i class="fas fa-plus"></i>
+    </button>
 
-  /* --------------------- Study Modal Styles --------------------- */
-  .modal {
-    display: none; 
-    position: fixed;
-    z-index: 1000;
-    left: 0; top: 0;
-    width: 100%; height: 100%;
-    overflow: auto;
-    background-color: rgba(0, 0, 0, 0.8);
-    justify-content: center;
-    align-items: center;
-  }
-  .modal-content {
-    position: relative;
-    width: 80%;
-    max-width: 800px;
-    text-align: center;
-    background: transparent;
-    border: none;
-  }
-  .flashcard-modal {
-    perspective: 1000px;
-    width: 600px; 
-    height: 400px;
-    margin: 0 auto;
-    cursor: pointer;
-    position: relative;
-  }
-  .flashcard-inner {
-    position: relative;
-    width: 100%; height: 100%;
-    transition: transform 0.6s;
-    transform-style: preserve-3d;
-  }
-  .flipped .flashcard-inner {
-    transform: rotateY(180deg);
-  }
-  .flashcard-front,
-  .flashcard-back {
-    position: absolute;
-    width: 100%; height: 100%;
-    backface-visibility: hidden;
-    border: none;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 2rem;
-    box-sizing: border-box;
-    font-size: 1.5rem;
-  }
-  .flashcard-front {
-    background-color: #fff;
-    color: #333;
-  }
-  .flashcard-back {
-    background-color: #eee;
-    color: #333;
-    transform: rotateY(180deg);
-  }
-  body.dark-mode .flashcard-front {
-    background-color: #2c2c2c;
-    color: #eee;
-  }
-  body.dark-mode .flashcard-back {
-    background-color: #444;
-    color: #eee;
-  }
-  .flashcard-swap-out {
-    animation: swapOut 0.3s forwards;
-  }
-  .flashcard-swap-in {
-    animation: swapIn 0.3s forwards;
-  }
-  @keyframes swapOut {
-    from { opacity: 1; transform: translateX(0); }
-    to { opacity: 0; transform: translateX(-50px); }
-  }
-  @keyframes swapIn {
-    from { opacity: 0; transform: translateX(50px); }
-    to { opacity: 1; transform: translateX(0); }
-  }
-  .nav-btn {
-    position: fixed;
-    top: 50%;
-    transform: translateY(-50%);
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 3rem;
-    padding: 10px;
-    cursor: pointer;
-    z-index: 1100;
-  }
-  .nav-btn.left { left: 20px; }
-  .nav-btn.right { right: 20px; }
-  .close-btn {
-    position: fixed;
-    top: 20px; right: 20px;
-    background: transparent;
-    border: none;
-    color: #fff;
-    font-size: 2rem;
-    padding: 10px;
-    cursor: pointer;
-    z-index: 1100;
-  }
-
-  /* Modal overlay for editing flashcard */
-  .modal-overlay {
-    display: none;
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-color: rgba(0,0,0,0.5);
-    justify-content: center;
-    align-items: center;
-    z-index: 1200;
-  }
-  .modal-content-edit {
-    background: #fff;
-    padding: 2rem;
-    border-radius: 8px;
-    width: 400px;
-    max-width: 90%;
-  }
-  .modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modal-header h5 { margin: 0; }
-  .modal-header .close-btn { font-size: 1.25rem; }
-
-  /* Dark Mode Overrides for Modals */
-  body.dark-mode .modal-overlay {
-    background-color: rgba(0, 0, 0, 0.7);
-  }
-  body.dark-mode .modal-content-edit {
-    background-color: #2c2c2c;
-    color: #eee;
-  }
-  body.dark-mode .modal-content-edit input.form-control {
-    background-color: #444;
-    color: #eee;
-    border: 1px solid #555;
-  }
-  
-</style>
-
-<div class="outer-container">
-  <h2 class="mb-4">My Flashcard Sets</h2>
-  <div class="fixed-container">
-    <!-- Left Column: List of Decks -->
-    <div class="form-control fixed-menu deck-list">
-      {% if flashcard_sets %}
-        {% for deck in flashcard_sets %}
-          <div class="deck-item" 
-              data-deck-id="{{ deck.id }}"
-              data-deck-title="{{ deck.title }}"
-              data-deck-json='[
-                {% for card in deck.flashcards %}
-                  { "id": "{{ card.id }}", "question": "{{ card.question|escape }}", "answer": "{{ card.answer|escape }}" }
-                  {% if not loop.last %},{% endif %}
-                {% endfor %}
-              ]'>
-            <strong>{{ deck.title }}</strong><br>
-            <small>{{ deck.flashcards|length }} flashcards</small>
-          </div>
-        {% endfor %}
-      {% else %}
-        <p>No decks found. <a href="{{ url_for('create_deck') }}">Create one now</a>.</p>
-      {% endif %}
-    </div>
-    <!-- Right Column: Deck Details -->
-    <div class="form-control fixed-menu scrollable deck-details" id="deckDetails">
-      <div class="deck-header">
-        <div class="deck-header-left">
-          <h4 id="deckTitle"></h4>
-          <button id="editDeckNameBtn" title="Edit Deck Name"><i class="fas fa-pencil-alt"></i></button>
+    <div class="row">
+        <!-- Left Column: Flashcard Sets -->
+        <div class="col-md-4">
+            <div class="scrollable-column">
+                <h3 class="text-center">Flashcard Sets</h3>
+                <ul class="list-group" id="flashcardSetsList">
+                    {% if flashcard_sets %}
+                        {% for set in flashcard_sets %}
+                            <li class="list-group-item flashcard-set-item" data-set-id="{{ set.id }}">
+                                {{ set.name }}
+                            </li>
+                        {% endfor %}
+                    {% else %}
+                        <li class="list-group-item text-muted text-center">No flashcard sets available. Create one!</li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
-        <div class="deck-header-right">
-          <button id="deleteDeckBtn" title="Delete Deck"><i class="fas fa-trash-alt"></i></button>
+
+        <!-- Right Column: Flashcards in Selected Set -->
+        <div class="col-md-8">
+            <div class="scrollable-column">
+                <h3 class="text-center" id="flashcardSetTitle">Flashcards</h3>
+                <div id="flashcardContainer">
+                    <p class="text-center text-muted">Select a flashcard set to view its flashcards.</p>
+                </div>
+            </div>
         </div>
-      </div>
-      <div class="deck-actions">
-        <button class="btn btn-sm btn-secondary" id="shuffleBtn">Shuffle</button>
-        <button class="btn btn-sm btn-primary" id="studyBtn">Study</button>
-      </div>
-      <hr>
-      <div class="flashcard-list" id="flashcardList"></div>
     </div>
-  </div>
-</div>
-
-<!-- Study Modal -->
-<div id="studyModal" class="modal">
-  <button id="closeModal" class="close-btn">×</button>
-  <button id="prevBtn" class="nav-btn left">←</button>
-  <button id="nextBtn" class="nav-btn right">→</button>
-  <div class="modal-content">
-    <div class="flashcard-modal" id="modalFlashcard">
-      <div class="flashcard-inner" id="flashcardInner">
-        <div class="flashcard-front" id="flashcardFront"></div>
-        <div class="flashcard-back" id="flashcardBack"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- Modal for editing flashcard -->
-<div class="modal-overlay" id="editFlashcardModal">
-  <div class="modal-content-edit">
-    <div class="modal-header">
-      <h5>Edit Flashcard</h5>
-      <button class="close-btn" onclick="closeEditFlashcardModal()">&times;</button>
-    </div>
-    <form id="editFlashcardForm">
-      <input type="hidden" name="card_id" id="editCardId">
-      <div class="form-group mt-3">
-        <label for="editQuestion">Question</label>
-        <input class="form-control" id="editQuestion" name="question" type="text" required>
-      </div>
-      <div class="form-group mt-3">
-        <label for="editAnswer">Answer</label>
-        <input class="form-control" id="editAnswer" name="answer" type="text" required>
-      </div>
-      <button type="submit" class="btn btn-success btn-block mt-3">Save Changes</button>
-    </form>
-  </div>
-</div>
-
-<!-- Modal for editing deck name -->
-<div class="modal-overlay" id="editDeckModal">
-  <div class="modal-content-edit">
-    <div class="modal-header">
-      <h5>Edit Deck Name</h5>
-      <button class="close-btn" onclick="closeEditDeckModal()">&times;</button>
-    </div>
-    <form id="editDeckForm">
-      <div class="form-group mt-3">
-        <label for="editDeckName">Deck Name</label>
-        <input class="form-control" id="editDeckName" name="deck_name" type="text" required>
-      </div>
-      <button type="submit" class="btn btn-success btn-block mt-3">Save Changes</button>
-    </form>
-  </div>
 </div>
 
 <script>
-  let currentDeck = [];
-  let currentIndex = 0;
-  let currentDeckId = null;
+    document.addEventListener("DOMContentLoaded", function () {
+        const flashcardSets = document.querySelectorAll(".flashcard-set-item");
+        const flashcardContainer = document.getElementById("flashcardContainer");
+        const flashcardSetTitle = document.getElementById("flashcardSetTitle");
 
-  const deckDetails = document.getElementById('deckDetails');
-  const deckTitleElem = document.getElementById('deckTitle');
-  const flashcardList = document.getElementById('flashcardList');
-  const shuffleBtn = document.getElementById('shuffleBtn');
-  const studyBtn = document.getElementById('studyBtn');
-  const deleteDeckBtn = document.getElementById('deleteDeckBtn');
-  const editDeckNameBtn = document.getElementById('editDeckNameBtn');
+        flashcardSets.forEach(set => {
+            set.addEventListener("click", function () {
+                const setId = this.getAttribute("data-set-id");
 
-  // When a deck is clicked, load its data
-  document.querySelectorAll('.deck-item').forEach(item => {
-    item.addEventListener('click', () => {
-      document.querySelectorAll('.deck-item').forEach(i => i.classList.remove('active'));
-      item.classList.add('active');
+                // Fetch flashcards for selected set
+                fetch(`/flashcards/${setId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.flashcards.length > 0) {
+                            flashcardContainer.innerHTML = data.flashcards.map(card => `
+                                <div class="flashcard">
+                                    <p><strong>Question:</strong> ${card.question}</p>
+                                    <p><strong>Answer:</strong> ${card.answer}</p>
+                                </div>
+                            `).join("");
+                        } else {
+                            flashcardContainer.innerHTML = `<p class="text-center text-muted">No flashcards in this set. Add some!</p>`;
+                        }
 
-      const deckTitle = item.getAttribute('data-deck-title');
-      const deckJson = item.getAttribute('data-deck-json');
-      currentDeckId = item.getAttribute('data-deck-id');
-
-      deckTitleElem.textContent = deckTitle;
-      deckDetails.style.display = 'block';
-
-      currentDeck = JSON.parse(deckJson);
-      currentIndex = 0;
-
-      renderFlashcards(currentDeck);
-    });
-  });
-
-  // Render flashcards with an edit (pencil) button
-  function renderFlashcards(deck) {
-    flashcardList.innerHTML = '';
-    deck.forEach((card) => {
-      const div = document.createElement('div');
-      div.className = 'card-item';
-      div.id = `card-${card.id}`;
-      div.innerHTML = `
-        <div class="flashcard-text">
-          <strong>${card.question}</strong>
-          <span>${card.answer}</span>
-        </div>
-        <button onclick="openEditFlashcardModal('${card.id}')" title="Edit Flashcard">
-          <i class="fas fa-pencil-alt"></i>
-        </button>
-      `;
-      flashcardList.appendChild(div);
-    });
-  }
-
-  // Shuffle deck
-  shuffleBtn.addEventListener('click', () => {
-    shuffleDeck(currentDeck);
-    currentIndex = 0;
-    renderFlashcards(currentDeck);
-  });
-  function shuffleDeck(deck) {
-    for (let i = deck.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [deck[i], deck[j]] = [deck[j], deck[i]];
-    }
-  }
-
-  /* --------------------- Study Modal Functionality --------------------- */
-  studyBtn.addEventListener('click', () => { openStudyModal(); });
-  function openStudyModal() {
-    if (!currentDeck || currentDeck.length === 0) return;
-    const modal = document.getElementById('studyModal');
-    modal.style.display = 'flex';
-    currentIndex = 0;
-    renderModalCard();
-    document.getElementById('modeToggle').style.display = 'none';
-  }
-  function closeStudyModal() {
-    const modal = document.getElementById('studyModal');
-    modal.style.display = 'none';
-    document.getElementById('modalFlashcard').classList.remove('flipped');
-    document.getElementById('modeToggle').style.display = 'block';
-  }
-  function renderModalCard() {
-    const card = currentDeck[currentIndex];
-    const frontElem = document.getElementById('flashcardFront');
-    const backElem = document.getElementById('flashcardBack');
-    frontElem.textContent = card.question;
-    backElem.textContent = card.answer;
-    // Ensure card is not flipped so that question is shown
-    document.getElementById('modalFlashcard').classList.remove('flipped');
-  }
-  function animateSwap(callback) {
-    const flashcard = document.getElementById('modalFlashcard');
-    // Always reset to question side before animating
-    flashcard.classList.remove('flipped');
-    flashcard.classList.add('flashcard-swap-out');
-    setTimeout(() => {
-      callback();
-      flashcard.classList.remove('flashcard-swap-out');
-      flashcard.classList.add('flashcard-swap-in');
-      setTimeout(() => {
-        flashcard.classList.remove('flashcard-swap-in');
-      }, 300);
-    }, 300);
-  }
-  document.getElementById('modalFlashcard').addEventListener('click', () => { toggleFlip(); });
-  function toggleFlip() {
-    const cardElem = document.getElementById('modalFlashcard');
-    cardElem.classList.toggle('flipped');
-  }
-  document.getElementById('prevBtn').addEventListener('click', () => {
-    if (currentIndex > 0) { currentIndex--; animateSwap(renderModalCard); }
-  });
-  document.getElementById('nextBtn').addEventListener('click', () => {
-    if (currentIndex < currentDeck.length - 1) { currentIndex++; animateSwap(renderModalCard); }
-  });
-  document.getElementById('closeModal').addEventListener('click', () => { closeStudyModal(); });
-  document.addEventListener('keydown', (e) => {
-    const modal = document.getElementById('studyModal');
-    if (modal.style.display === 'flex') {
-      if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault();
-        toggleFlip();
-      } else if (e.key === 'ArrowLeft') {
-        if (currentIndex > 0) { currentIndex--; animateSwap(renderModalCard); }
-      } else if (e.key === 'ArrowRight') {
-        if (currentIndex < currentDeck.length - 1) { currentIndex++; animateSwap(renderModalCard); }
-      } else if (e.key === 'Escape') {
-        closeStudyModal();
-      }
-    }
-  });
-
-  // Delete deck functionality using AJAX
-  deleteDeckBtn.addEventListener('click', () => {
-    if (confirm("Are you sure you want to delete this flashcard set?")) {
-      fetch('/delete_deck/' + currentDeckId, { method: 'POST' })
-      .then(response => response.json())
-      .then(data => {
-        if (data.success) {
-          let deckItem = document.querySelector(`.deck-item[data-deck-id="${currentDeckId}"]`);
-          if (deckItem) { deckItem.remove(); }
-          deckDetails.style.display = 'none';
-          alert("Flashcard set deleted successfully.");
-        } else {
-          alert("Error deleting flashcard set: " + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert("An error occurred. Please try again.");
-      });
-    }
-  });
-
-  // Edit deck name functionality via modal
-  editDeckNameBtn.addEventListener('click', () => {
-    const currentName = deckTitleElem.textContent;
-    document.getElementById('editDeckName').value = currentName;
-    document.getElementById('editDeckModal').style.display = 'flex';
-  });
-  function closeEditDeckModal() {
-    document.getElementById('editDeckModal').style.display = 'none';
-  }
-  document.getElementById('editDeckForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const newName = document.getElementById('editDeckName').value.trim();
-    if (newName !== "") {
-      deckTitleElem.textContent = newName;
-      const deckItem = document.querySelector(`.deck-item[data-deck-id="${currentDeckId}"]`);
-      if (deckItem) {
-        deckItem.querySelector('strong').textContent = newName;
-      }
-      closeEditDeckModal();
-      fetch('/update_deck', {
-        method: 'POST',
-        body: new URLSearchParams({
-          deck_id: currentDeckId,
-          deck_name: newName
-        })
-      })
-      .then(response => response.json())
-      .then(data => {
-        if (!data.success) {
-          alert("Error updating deck name: " + data.message);
-        }
-      })
-      .catch(error => {
-        console.error('Error:', error);
-        alert("An error occurred while updating deck name.");
-      });
-    }
-  });
-
-  // Edit flashcard functionality
-  function openEditFlashcardModal(cardId) {
-    const modal = document.getElementById('editFlashcardModal');
-    modal.style.display = 'flex';
-    const cardItem = document.getElementById(`card-${cardId}`);
-    const questionText = cardItem.querySelector('.flashcard-text strong').textContent.trim();
-    const answerText = cardItem.querySelector('.flashcard-text span').textContent.trim();
-    document.getElementById('editCardId').value = cardId;
-    document.getElementById('editQuestion').value = questionText;
-    document.getElementById('editAnswer').value = answerText;
-  }
-  function closeEditFlashcardModal() {
-    document.getElementById('editFlashcardModal').style.display = 'none';
-  }
-  document.getElementById('editFlashcardForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const formData = new FormData(this);
-    fetch('/update_flashcard', {
-      method: 'POST',
-      body: new URLSearchParams(formData)
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.success) {
-        const cardId = formData.get('card_id');
-        const newQuestion = formData.get('question');
-        const newAnswer = formData.get('answer');
-        const cardItem = document.getElementById(`card-${cardId}`);
-        cardItem.querySelector('.flashcard-text strong').textContent = newQuestion;
-        cardItem.querySelector('.flashcard-text span').textContent = newAnswer;
-        // Update currentDeck so that study modal reflects changes
-        currentDeck = currentDeck.map(card => {
-          if(String(card.id) === cardId) {
-            return {...card, question: newQuestion, answer: newAnswer};
-          }
-          return card;
+                        // Update set title
+                        flashcardSetTitle.innerText = data.set_name;
+                    })
+                    .catch(error => console.error("Error fetching flashcards:", error));
+            });
         });
-        closeEditFlashcardModal();
-      } else {
-        alert("Error updating flashcard: " + data.message);
-      }
-    })
-    .catch(error => {
-      console.error('Error:', error);
-      alert("An error occurred. Please try again.");
+
+        // Add Flashcard Set Button Click
+        document.getElementById("addFlashcardSet").addEventListener("click", function () {
+            const setName = prompt("Enter the name of your new flashcard set:");
+            if (setName) {
+                fetch("/flashcard-sets", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ name: setName })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(data.message);
+                    location.reload();
+                })
+                .catch(error => console.error("Error creating flashcard set:", error));
+            }
+        });
     });
-  });
-  window.onclick = function(event) {
-    const editModal = document.getElementById('editFlashcardModal');
-    if (event.target === editModal) { closeEditFlashcardModal(); }
-    const deckModal = document.getElementById('editDeckModal');
-    if (event.target === deckModal) { closeEditDeckModal(); }
-  };
 </script>
+
 {% endblock %}
