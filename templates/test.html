@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flashcard Creator with Edit & Delete</title>
+  <!-- Tailwind CSS & Font Awesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+</head>
+<body class="bg-gray-100 flex items-center justify-center h-screen">
+
+  <div class="flex gap-6">
+    <!-- Main Modal (Fixed in Place) -->
+    <div class="bg-white rounded-2xl shadow-lg p-8 w-[800px] h-[500px] relative">
+      <div class="flex border-b">
+        <button onclick="switchTab('manual')" id="manualTab" 
+                class="px-4 py-2 font-semibold border-b-4 border-blue-500 transition-all duration-300">
+          Manual
+        </button>
+        <button onclick="switchTab('ai')" id="aiTab" 
+                class="px-4 py-2 font-semibold text-gray-500 border-b-4 border-transparent transition-all duration-300">
+          AI
+        </button>
+      </div>
+      
+      <!-- Manual Flashcard Input -->
+      <div id="manualContent" class="mt-4">
+        <input type="text" id="manualQuestion" 
+               class="w-full p-2 border-2 border-gray-400 rounded mb-4" 
+               placeholder="Enter question">
+        <input type="text" id="manualAnswer" 
+               class="w-full p-2 border-2 border-gray-400 rounded mb-6" 
+               placeholder="Enter answer">
+        <button onclick="addFlashcard('manual')" 
+                class="absolute bottom-6 right-8 px-4 py-2 bg-green-500 text-white rounded shadow-lg flex items-center">
+          Add Flashcard
+        </button>
+      </div>
+      
+      <!-- AI Flashcard Input -->
+      <div id="aiContent" class="mt-4 hidden">
+        <div class="flex gap-4 mb-4">
+          <button onclick="toggleAiMode('text')" id="textMode" class="px-4 py-2 bg-blue-500 text-white rounded">Text Input</button>
+          <button onclick="toggleAiMode('file')" id="fileMode" class="px-4 py-2 bg-gray-300 rounded">File Upload</button>
+        </div>
+        
+        <div id="textInputSection" class="flex flex-col h-[300px]">
+          <input type="number" id="textFlashcardCount" class="w-full p-2 border-2 border-gray-400 rounded mb-4" placeholder="Optional: Number of flashcards" min="1">
+          <textarea id="aiInput" class="w-full p-2 rounded h-[150px] min-h-[150px] max-h-[250px] overflow-y-auto resize-y border-2 border-dashed border-gray-400" placeholder="Enter text"></textarea>
+        </div>
+        
+        <!-- Modified File Upload Section -->
+        <div id="fileUploadSection" class="hidden flex flex-col w-full h-[400px] gap-4">
+          <input type="number" id="fileFlashcardCount" class="w-full p-2 border-2 border-gray-400 rounded mb-4" placeholder="Optional: Number of flashcards" min="1">
+          <div class="flex flex-row gap-4 w-full">
+            <!-- Upload Button with fixed height -->
+            <div class="flex flex-col items-center justify-center w-1/2 h-[200px] bg-gray-100 rounded-lg cursor-pointer border-2 border-dashed border-gray-400 hover:bg-gray-200 transition" onclick="document.getElementById('aiFile').click();">
+              <input type="file" id="aiFile" class="hidden" multiple onchange="handleFileUpload()" accept="image/*,.pdf,.doc,.docx">
+              <div class="flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 19V9"></path>
+                  <path d="M5 12l7-7 7 7"></path>
+                  <rect x="3" y="19" width="18" height="3" rx="1"></rect>
+                </svg>
+                <p class="mt-2 text-gray-600">Upload Files</p>
+              </div>
+            </div>
+            <!-- File List Display with navigability if content exceeds 200px -->
+            <div id="fileList" class="w-1/2 h-[200px] max-h-[200px] overflow-y-auto p-2 border rounded bg-white"></div>
+          </div>
+        </div>
+        
+        <button onclick="addFlashcard('ai')" class="absolute bottom-6 right-8 px-4 py-2 bg-green-500 text-white rounded flex items-center shadow-lg">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+            <path d="M10 2a8 8 0 100 16 8 8 0 000-16zm3 9H7v-2h6v2z" />
+          </svg>
+          Generate Flashcards
+        </button>
+      </div>
+    </div>
+    
+    <!-- Sidebar for Flashcards -->
+    <div id="flashcardSidebar" 
+         class="w-[400px] max-h-[500px] overflow-y-auto rounded-2xl p-6 flex flex-col invisible min-w-0">
+      <ul id="flashcardList" class="mt-2 flex flex-col-reverse gap-2 min-w-0"></ul>
+    </div>
+  </div>
+  
+  <!-- Edit Modal (hidden by default) -->
+  <div id="editModal" class="fixed inset-0 bg-gray-800 bg-opacity-50 flex items-center justify-center hidden">
+    <div class="bg-white rounded-lg p-6 w-1/3 relative">
+      <!-- X Button for cancel; repositioned -->
+      <span onclick="closeEditModal()" 
+            class="absolute top-4 right-4 text-2xl cursor-pointer text-gray-600 hover:text-gray-800">
+        &times;
+      </span>
+      <h2 class="text-xl font-bold mb-4">Edit Flashcard</h2>
+      <input type="text" id="editQuestion" class="w-full p-2 border-2 border-gray-400 rounded mb-4" placeholder="Edit question">
+      <input type="text" id="editAnswer" class="w-full p-2 border-2 border-gray-400 rounded mb-4" placeholder="Edit answer">
+      <div class="flex justify-end gap-4">
+        <button onclick="closeEditModal()" class="px-4 py-2 bg-gray-300 text-black rounded">Cancel</button>
+        <button id="saveEditBtn" onclick="saveEdit()" class="px-4 py-2 bg-gray-300 text-white rounded cursor-not-allowed" disabled>
+          Save Changes
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // ----------------------------------------------------
+    // Global array of flashcards (each with a unique id)
+    // ----------------------------------------------------
+    let flashcards = [];
+    let currentEditId = null; // To track the card being edited
+
+    // On page load, load flashcards from localStorage and render them
+    document.addEventListener("DOMContentLoaded", function() {
+        const storedCards = localStorage.getItem("flashcards");
+        if (storedCards) {
+            flashcards = JSON.parse(storedCards);
+        }
+        if (flashcards.length > 0) {
+            document.getElementById('flashcardSidebar').classList.remove('invisible');
+            flashcards.forEach(card => {
+            addFlashcardToDOM(card.id, card.question, card.answer, false);
+            });
+        }
+        // Enter key listeners for manual inputs
+        document.getElementById("manualQuestion").addEventListener("keydown", handleManualEnter);
+        document.getElementById("manualAnswer").addEventListener("keydown", handleManualEnter);
+      
+        // Listen for changes in the edit modal to enable the Save Changes button
+        document.getElementById("editQuestion").addEventListener("input", enableSaveButton);
+        document.getElementById("editAnswer").addEventListener("input", enableSaveButton);
+
+        const editQuestionInput = document.getElementById("editQuestion");
+        const editAnswerInput = document.getElementById("editAnswer");
+        
+        function handleEditEnter(event) {
+            if (event.key === "Enter" && !document.getElementById("saveEditBtn").disabled) {
+            event.preventDefault(); // Prevent form submission or unwanted behavior
+            saveEdit();
+            }
+        }
+        
+        editQuestionInput.addEventListener("keydown", handleEditEnter);
+        editAnswerInput.addEventListener("keydown", handleEditEnter);
+
+        let activeTab = localStorage.getItem("activeTab") || "manual";
+        switchTab(activeTab);
+
+    });
+    
+    // ----------------------------------------------------
+    // 1. Switch between Manual and AI tabs
+    // ----------------------------------------------------
+    function switchTab(tab) {
+      document.getElementById('manualContent').classList.toggle('hidden', tab !== 'manual');
+      document.getElementById('aiContent').classList.toggle('hidden', tab !== 'ai');
+      document.getElementById('manualTab').classList.toggle('border-blue-500', tab === 'manual');
+      document.getElementById('manualTab').classList.toggle('border-transparent', tab !== 'manual');
+      document.getElementById('manualTab').classList.toggle('text-black', tab === 'manual');
+      document.getElementById('manualTab').classList.toggle('text-gray-500', tab !== 'manual');
+      document.getElementById('aiTab').classList.toggle('border-blue-500', tab === 'ai');
+      document.getElementById('aiTab').classList.toggle('border-transparent', tab !== 'ai');
+      document.getElementById('aiTab').classList.toggle('text-black', tab === 'ai');
+      document.getElementById('aiTab').classList.toggle('text-gray-500', tab !== 'ai');
+
+      localStorage.setItem("activeTab", tab);
+    }
+    
+    function toggleAiMode(mode) {
+      document.getElementById('textInputSection').classList.toggle('hidden', mode !== 'text');
+      document.getElementById('fileUploadSection').classList.toggle('hidden', mode !== 'file');
+    }
+    
+    // ----------------------------------------------------
+    // 2. Handle Enter key to add flashcards (Manual mode)
+    // ----------------------------------------------------
+    function handleManualEnter(event) {
+      if (event.key === "Enter") {
+        const questionText = document.getElementById("manualQuestion").value.trim();
+        const answerText = document.getElementById("manualAnswer").value.trim();
+        if (questionText && answerText) {
+          event.preventDefault();
+          addFlashcard("manual");
+        }
+      }
+    }
+    
+    // ----------------------------------------------------
+    // 3. Add Flashcard (Manual)
+    // ----------------------------------------------------
+    function addFlashcard(mode) {
+      if (mode === "manual") {
+        const questionInput = document.getElementById("manualQuestion");
+        const answerInput = document.getElementById("manualAnswer");
+        const question = questionInput.value.trim();
+        const answer = answerInput.value.trim();
+        if (!question || !answer) {
+          alert("Please fill in both the question and answer.");
+          return;
+        }
+        document.getElementById("flashcardSidebar").classList.remove("invisible");
+        
+        // Generate a unique id for the flashcard using the current timestamp
+        const id = Date.now();
+        flashcards.unshift({ id, question, answer });
+        localStorage.setItem("flashcards", JSON.stringify(flashcards));
+        
+        addFlashcardToDOM(id, question, answer, true);
+        
+        questionInput.value = "";
+        answerInput.value = "";
+      }
+      // For AI mode, implement similarly if needed
+    }
+    
+    // ----------------------------------------------------
+    // 4. Helper: Add Flashcard to the DOM with edit & delete icons
+    // ----------------------------------------------------
+    function addFlashcardToDOM(id, question, answer, prepend = true) {
+      const flashcardList = document.getElementById("flashcardList");
+      const li = document.createElement("li");
+      li.className = `
+        relative bg-white w-full p-6 shadow rounded-lg 
+        border border-gray-200 break-all whitespace-normal min-w-0 min-h-[150px]
+      `;
+      li.style.wordBreak = "break-all";
+      li.setAttribute("data-id", id);
+    
+      // Create container for the text content with extra top margin
+      const contentContainer = document.createElement("div");
+      contentContainer.className = "mt-10"; // Adjust margin-top as needed
+    
+      // Create text container elements
+      const questionDiv = document.createElement("div");
+      questionDiv.className = "font-bold mb-2";
+      questionDiv.textContent = question;
+      
+      const answerDiv = document.createElement("div");
+      answerDiv.textContent = answer;
+      
+      // Append text elements to the content container
+      contentContainer.appendChild(questionDiv);
+      contentContainer.appendChild(answerDiv);
+      
+      // Create icon container (positioned at top right)
+      const iconContainer = document.createElement("div");
+      iconContainer.className = "absolute top-3 right-3 flex gap-4 z-50";
+      
+      // Edit icon using Font Awesome (pencil)
+      const editIcon = document.createElement("i");
+      editIcon.className = "fas fa-pencil-alt text-xl text-gray-600 hover:text-blue-500 cursor-pointer";
+      editIcon.addEventListener("click", function() {
+        openEditModal(id);
+      });
+      
+      // Delete icon using Font Awesome (trash can)
+      const deleteIcon = document.createElement("i");
+      deleteIcon.className = "fas fa-trash-alt text-xl text-red-600 hover:text-red-500 cursor-pointer";
+      deleteIcon.addEventListener("click", function() {
+        if (confirm("Are you sure you want to delete this flashcard?")) {
+          deleteFlashcard(id);
+        }
+      });
+      
+      iconContainer.appendChild(editIcon);
+      iconContainer.appendChild(deleteIcon);
+      
+      // Append elements to the flashcard list item
+      li.appendChild(iconContainer);
+      li.appendChild(contentContainer);
+      
+      if (prepend) {
+        flashcardList.prepend(li);
+      } else {
+        flashcardList.appendChild(li);
+      }
+    }
+    
+    // ----------------------------------------------------
+    // 5. Delete a flashcard
+    // ----------------------------------------------------
+    function deleteFlashcard(id) {
+      // Remove from the global array and update localStorage
+      flashcards = flashcards.filter(card => card.id !== id);
+      localStorage.setItem("flashcards", JSON.stringify(flashcards));
+      // Remove from the DOM
+      const flashcardList = document.getElementById("flashcardList");
+      const cardElement = flashcardList.querySelector(`[data-id="${id}"]`);
+      if (cardElement) {
+        flashcardList.removeChild(cardElement);
+      }
+    }
+    
+    // ----------------------------------------------------
+    // 6. Open Edit Modal for a flashcard
+    // ----------------------------------------------------
+    function openEditModal(id) {
+      currentEditId = id;
+      const card = flashcards.find(card => card.id === id);
+      if (!card) return;
+      document.getElementById("editQuestion").value = card.question;
+      document.getElementById("editAnswer").value = card.answer;
+      // Disable Save button initially
+      const saveBtn = document.getElementById("saveEditBtn");
+      saveBtn.disabled = true;
+      saveBtn.classList.remove("bg-blue-500", "cursor-pointer");
+      saveBtn.classList.add("bg-gray-300", "cursor-not-allowed");
+      document.getElementById("editModal").classList.remove("hidden");
+    }
+    
+    function closeEditModal() {
+      document.getElementById("editModal").classList.add("hidden");
+      currentEditId = null;
+    }
+    
+    // Enable Save button if changes are made
+    function enableSaveButton() {
+      const card = flashcards.find(card => card.id === currentEditId);
+      if (!card) return;
+      const newQuestion = document.getElementById("editQuestion").value.trim();
+      const newAnswer = document.getElementById("editAnswer").value.trim();
+      const saveBtn = document.getElementById("saveEditBtn");
+      if (newQuestion !== card.question || newAnswer !== card.answer) {
+        saveBtn.disabled = false;
+        saveBtn.classList.remove("bg-gray-300", "cursor-not-allowed");
+        saveBtn.classList.add("bg-blue-500", "cursor-pointer");
+      } else {
+        saveBtn.disabled = true;
+        saveBtn.classList.remove("bg-blue-500", "cursor-pointer");
+        saveBtn.classList.add("bg-gray-300", "cursor-not-allowed");
+      }
+    }
+    
+    // Save changes made in the edit modal
+    function saveEdit() {
+      if (!currentEditId) return;
+      const newQuestion = document.getElementById("editQuestion").value.trim();
+      const newAnswer = document.getElementById("editAnswer").value.trim();
+      const cardIndex = flashcards.findIndex(card => card.id === currentEditId);
+      if (cardIndex === -1) return;
+      
+      flashcards[cardIndex].question = newQuestion;
+      flashcards[cardIndex].answer = newAnswer;
+      localStorage.setItem("flashcards", JSON.stringify(flashcards));
+      
+      // Update the corresponding DOM element
+      const flashcardList = document.getElementById("flashcardList");
+      const cardElement = flashcardList.querySelector(`[data-id="${currentEditId}"]`);
+      if (cardElement) {
+        // Update the question (first text div inside content container)
+        cardElement.querySelector(".font-bold").textContent = newQuestion;
+        // Update the answer (the second div inside the content container)
+        const contentDivs = cardElement.querySelector("div.mt-10").children;
+        if (contentDivs.length > 1) {
+          contentDivs[1].textContent = newAnswer;
+        }
+      }
+      
+      closeEditModal();
+    }
+    
+    // ----------------------------------------------------
+    // 7. Handle File Uploads
+    // ----------------------------------------------------
+    // Update the file list display as tiles
+    function updateFileListDisplay() {
+    const fileInput = document.getElementById('aiFile');
+    const fileListContainer = document.getElementById('fileList');
+    fileListContainer.innerHTML = ''; // Clear previous display
+    const files = Array.from(fileInput.files).slice(0, 3); // Only consider up to 3 files
+
+    files.forEach((file, index) => {
+        // Create a tile for each file
+        const tile = document.createElement("div");
+        tile.className = "flex items-center justify-between bg-gray-200 p-2 rounded mb-2";
+        
+        // File name display
+        const fileNameSpan = document.createElement("span");
+        fileNameSpan.textContent = file.name;
+        
+        // Remove (×) button
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "text-red-600 hover:text-red-800 font-bold";
+        removeBtn.textContent = "×";
+        removeBtn.addEventListener("click", function() {
+        removeFile(index);
+        });
+        
+        tile.appendChild(fileNameSpan);
+        tile.appendChild(removeBtn);
+        fileListContainer.appendChild(tile);
+    });
+    }
+
+    // Remove a file at a given index from the file input's FileList
+    function removeFile(indexToRemove) {
+    const fileInput = document.getElementById('aiFile');
+    const files = Array.from(fileInput.files);
+    // Remove the file at the given index
+    files.splice(indexToRemove, 1);
+    
+    // Create a new DataTransfer to update the file input's files
+    const dt = new DataTransfer();
+    files.forEach(file => dt.items.add(file));
+    fileInput.files = dt.files;
+    
+    updateFileListDisplay();
+    }
+
+    // Handle file uploads: limit to 3 files and update the file list display
+    function handleFileUpload() {
+    const fileInput = document.getElementById('aiFile');
+    const files = Array.from(fileInput.files);
+    
+    if (files.length > 3) {
+        alert("You can upload a maximum of 3 files. Only the first 3 files will be processed.");
+        const dt = new DataTransfer();
+        files.slice(0, 3).forEach(file => dt.items.add(file));
+        fileInput.files = dt.files;
+    }
+    
+    updateFileListDisplay();
+    }
+  </script>
+  
+</body>
+</html>
