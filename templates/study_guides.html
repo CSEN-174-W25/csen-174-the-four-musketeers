@@ -637,6 +637,8 @@
             const button = this;
             const isManualMode = !document.getElementById('manualTab').classList.contains('hidden');
             const isAITextMode = !document.getElementById('aiTextInputMenu').classList.contains('hidden');
+            let apiUrl = isManualMode ? `/study-guides/${window.currentGuideId}` : `/study-guides/ai/${window.currentGuideId}`;
+
             
             // Ensure a study guide is currently selected
             if (!window.currentGuideId) {
@@ -677,7 +679,7 @@
             button.style.opacity = '0.7';
             
             // Now update the existing study guide via a PUT request
-            fetch(`/study-guides/${window.currentGuideId}`, {
+            fetch(apiUrl, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -723,6 +725,7 @@
                 button.style.opacity = '1';
             });
         });
+
 
         function resetButton() {
             const button = document.getElementById('confirmStudyGuideBtn');

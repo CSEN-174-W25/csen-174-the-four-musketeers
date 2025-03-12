@@ -571,12 +571,17 @@ def create_study_guide(current_user):
     db.session.commit()
     return jsonify({'message': 'Study guide created!', 'guide_id': new_guide.id}), 201
 
-@app.route('/study-guides/ai', methods=['POST'])
+@app.route('/study-guides/ai/<string:guide_id>', methods=['PUT'])
 @token_required
-def create_ai_study_guide(current_user):
+def update_ai_study_guide(current_user, guide_id):
     try:
+        study_guide = StudyGuide.query.filter_by(id=guide_id, user_id=current_user.id).first()
+        if not study_guide:
+            return jsonify({'message': 'Study guide not found or unauthorized'}), 404
+        
         content = None
-        title = request.form.get('title') if request.form else request.json.get('title', 'Untitled Study Guide')
+        data = request.get_json(silent=True)  # Avoid error if request is not JSON
+        title = request.form.get('title') if request.form else (data.get('title') if data else study_guide.title)
         
         # Handle file upload
         if 'file' in request.files:
@@ -590,9 +595,11 @@ def create_ai_study_guide(current_user):
             try:
                 file_content = file.read()
                 
-                # Handle different file types (reuse your existing file processing logic)
+                # Handle different file types
                 if file_ext in ['.txt', '.md', '.py', '.js', '.html', '.css', '.json', '.csv', '.log', '.xml', '.yaml', '.yml']:
+                    # Text files - try different encodings
                     encodings = ['utf-8', 'latin-1', 'ascii', 'cp1252']
+                    content = None
                     for encoding in encodings:
                         try:
                             content = file_content.decode(encoding)
@@ -600,53 +607,80 @@ def create_ai_study_guide(current_user):
                         except UnicodeDecodeError:
                             continue
                     if content is None:
-                        return jsonify({'message': 'Could not decode file content'}), 400
+                        return jsonify({'message': 'Could not decode file content. Please ensure it is a text file.'}), 400
                         
                 elif file_ext == '.pdf':
-                    pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
-                    content = ""
-                    for page in pdf_reader.pages:
-                        content += page.extract_text() + "\n"
+                    # PDF files
+                    try:
+                        pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_content))
+                        content = ""
+                        for page in pdf_reader.pages:
+                            content += page.extract_text() + "\n"
+                    except Exception as e:
+                        return jsonify({'message': f'Error reading PDF file: {str(e)}'}), 400
                         
                 elif file_ext in ['.doc', '.docx']:
-                    doc = Document(io.BytesIO(file_content))
-                    content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
-                    
+                    # Word documents
+                    try:
+                        doc = Document(io.BytesIO(file_content))
+                        content = "\n".join([paragraph.text for paragraph in doc.paragraphs])
+                    except Exception as e:
+                        return jsonify({'message': f'Error reading Word document: {str(e)}'}), 400
+
                 elif file_ext in ['.xlsx', '.xls']:
-                    df = pd.read_excel(io.BytesIO(file_content))
-                    content = df.to_string(index=False)
-                    
+                    # Excel files
+                    try:
+                        df = pd.read_excel(io.BytesIO(file_content))
+                        # Convert DataFrame to string representation
+                        content = df.to_string(index=False)
+                    except Exception as e:
+                        return jsonify({'message': f'Error reading Excel file: {str(e)}'}), 400
+
                 elif file_ext == '.pptx':
-                    prs = Presentation(io.BytesIO(file_content))
-                    content = ""
-                    for slide in prs.slides:
-                        for shape in slide.shapes:
-                            if hasattr(shape, "text"):
-                                content += shape.text + "\n"
-                                
+                    # PowerPoint files
+                    try:
+                        prs = Presentation(io.BytesIO(file_content))
+                        content = ""
+                        for slide in prs.slides:
+                            for shape in slide.shapes:
+                                if hasattr(shape, "text"):
+                                    content += shape.text + "\n"
+                    except Exception as e:
+                        return jsonify({'message': f'Error reading PowerPoint file: {str(e)}'}), 400
+
                 elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp']:
-                    image = Image.open(io.BytesIO(file_content))
-                    if image.mode in ('RGBA', 'P'):
-                        image = image.convert('RGB')
-                    content = pytesseract.image_to_string(image)
-                    if not content.strip():
-                        return jsonify({'message': 'Could not extract text from image'}), 400
-                
+                    # Image files - use OCR
+                    try:                    
+                        # Open the image using PIL
+                        image = Image.open(io.BytesIO(file_content))
+                        
+                        # Convert to RGB if necessary (for PNG with transparency)
+                        if image.mode in ('RGBA', 'P'):
+                            image = image.convert('RGB')
+                        
+                        # Perform OCR
+                        content = pytesseract.image_to_string(image)
+                        
+                        if not content.strip():
+                            return jsonify({'message': 'Could not extract text from image. The image might not contain readable text.'}), 400
+                    except Exception as e:
+                        return jsonify({'message': f'Error processing image file: {str(e)}'}), 400
+
                 else:
+                    # Try using textract as a fallback for other file types
                     try:
                         content = textract.process(io.BytesIO(file_content), extension=file_ext[1:]).decode('utf-8')
                     except:
-                        return jsonify({'message': 'Unsupported file type'}), 400
+                        return jsonify({'message': 'Unsupported file type. Please upload a text file, PDF, Word document, Excel file, PowerPoint, or image.'}), 400
                     
             except Exception as e:
                 return jsonify({'message': f'Error reading file: {str(e)}'}), 400
-                
+        # Handle text content
         else:
-            # Handle text input
             data = request.get_json()
             if not data or 'content' not in data:
-                return jsonify({'message': 'No content provided'}), 400
-            content = data.get('content')
+                return jsonify({'message': 'Content is required for AI-generated study guide'}), 400
+        content = data.get('content')
 
         if not content:
             return jsonify({'message': 'No content to process'}), 400
@@ -677,24 +711,17 @@ Please ensure the study guide is educational, easy to follow, and retains all im
         # Generate PDF data
         pdf_data = generate_pdf_from_content(study_guide_content)
         
-        # Create new study guide with the AI-generated content
-        new_guide = StudyGuide(
-            title=title,
-            content=study_guide_content,
-            user_id=current_user.id,
-            pdf_data=pdf_data
-        )
-        db.session.add(new_guide)
+        # Update existing study guide
+        study_guide.title = title
+        study_guide.content = study_guide_content
+        study_guide.pdf_data = pdf_data
         db.session.commit()
         
-        return jsonify({
-            'message': 'Study guide created!',
-            'guide_id': new_guide.id,
-        }), 201
-
+        return jsonify({'message': 'Study guide updated!'}), 200
+    
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'Failed to create study guide: {str(e)}'}), 500
+        return jsonify({'message': f'Failed to update study guide: {str(e)}'}), 500
 
 @app.route('/study-guides/<string:guide_id>', methods=['GET'])
 @token_required

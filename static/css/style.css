@@ -2284,3 +2284,14 @@ body.dark-mode .modal-right {
 .dark-dropdown a:hover {
     background: #555 !important;
 }
+
+#deleteButton {
+    background-color: #dc3545 !important; /* Force red */
+    border-color: #dc3545 !important;
+    color: white !important;
+}
+
+#deleteButton:hover {
+    background-color: #b52b39 !important; /* Darker red on hover */
+    border-color: #b52b39 !important;
+}
