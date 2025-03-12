@@ -21,7 +21,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 
 
-GEMINI_API_KEY = ""
+GEMINI_API_KEY = "AIzaSyCthF-5gqz4JIgMqlwyRSuV0EVttxRjaNg"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__)
@@ -69,7 +69,6 @@ class StudyGuide(db.Model):
     content = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    has_pdf = db.Column(db.Boolean, default=False)
     pdf_data = db.Column(db.LargeBinary)  # Store PDF data in the database
 
 # ============================
@@ -554,7 +553,7 @@ def get_study_guides(current_user):
         guide_data = {
             'id': guide.id,
             'name': guide.title,  # Changed from title to name to match template
-            'has_pdf': guide.has_pdf  # Use the actual has_pdf value from the database
+            'content': guide.content
         }
         study_guides.append(guide_data)
     return render_template('study_guides.html', study_guides=study_guides, user=current_user)
@@ -686,7 +685,6 @@ Please ensure the study guide is educational, easy to follow, and retains all im
             title=title,
             content=study_guide_content,
             user_id=current_user.id,
-            has_pdf=True,
             pdf_data=pdf_data
         )
         db.session.add(new_guide)
@@ -695,7 +693,6 @@ Please ensure the study guide is educational, easy to follow, and retains all im
         return jsonify({
             'message': 'Study guide created!',
             'guide_id': new_guide.id,
-            'has_pdf': True
         }), 201
 
     except Exception as e:
@@ -714,10 +711,8 @@ def get_study_guide(current_user, guide_id):
         try:
             pdf_data = generate_pdf_from_content(guide.content)
             guide.pdf_data = pdf_data
-            guide.has_pdf = True
             db.session.commit()
         except Exception:
-            guide.has_pdf = False
             db.session.commit()
     
     guide_data = {
@@ -725,7 +720,6 @@ def get_study_guide(current_user, guide_id):
         'title': guide.title,
         'content': guide.content,
         'created_at': guide.created_at,
-        'has_pdf': guide.has_pdf
     }
     return jsonify({'study_guide': guide_data})
 
@@ -743,7 +737,6 @@ def update_study_guide(current_user, guide_id):
         # Generate PDF data
         pdf_data = generate_pdf_from_content(data['content'])
         guide.pdf_data = pdf_data
-        guide.has_pdf = True
     db.session.commit()
     return jsonify({'message': 'Study guide updated!'})
 
@@ -998,7 +991,6 @@ def create_study_guide_with_pdf(current_user):
             title=title,
             content=content,
             user_id=current_user.id,
-            has_pdf=True  # We'll generate the PDF right away
         )
         db.session.add(new_guide)
         db.session.commit()
@@ -1014,7 +1006,6 @@ def create_study_guide_with_pdf(current_user):
         return jsonify({
             'message': 'Study guide created!',
             'guide_id': new_guide.id,
-            'has_pdf': True
         }), 201
         
     except Exception as e:
@@ -1031,6 +1022,10 @@ def handle_study_guide_pdf(current_user, guide_id):
     if request.method == 'DELETE':
         try:
             guide.content = ""
+            guide.pdf_data = None
+            pdf_path = os.path.join('static', 'pdfs', f'{guide.id}.pdf')
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)  # Remove the file on disk
             db.session.commit()
             return jsonify({'message': 'PDF deleted!'}), 200
         except Exception as e:
@@ -1042,7 +1037,6 @@ def handle_study_guide_pdf(current_user, guide_id):
         try:
             pdf_data = generate_pdf_from_content(guide.content)
             guide.pdf_data = pdf_data
-            guide.has_pdf = True
             db.session.commit()
         except Exception as e:
             return jsonify({'message': f'Failed to generate PDF: {str(e)}'}), 500
