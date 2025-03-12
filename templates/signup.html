@@ -71,7 +71,7 @@
     .then(response => response.json())
     .then(data => {
       if (data.message === "User created successfully!") {
-        alert("Sign up successful! Please log in.");
+        alert("Sign up successful!");
         window.location.href = "{{ url_for('login') }}";
       } else {
         alert(data.message || "Sign up failed.");
