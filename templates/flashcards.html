@@ -990,7 +990,7 @@
                 try {
                     // Show loading state
                     this.disabled = true;
-                    this.textContent = "Processing...";
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Processing...';
                     
                     for (const file of window.uploadedFiles) {
                         const formData = new FormData();
@@ -1015,9 +1015,9 @@
                             window.pendingFlashcards.push({
                                 question: card.question,
                                 answer: card.answer
-                });
-            });
-        }
+                            });
+                        });
+                    }
 
                     // Update UI
                     window.updatependingList();
@@ -1051,7 +1051,7 @@
                 try {
                     // Show loading state
                     this.disabled = true;
-                    this.textContent = "Generating...";
+                    this.innerHTML = '<i class="fas fa-spinner fa-spin"></i>Processing...';
                     
                     const response = await fetch("/flashcards/ai", {
                         method: "POST",

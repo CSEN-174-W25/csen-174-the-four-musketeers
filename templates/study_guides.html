@@ -633,99 +633,121 @@
         });
 
         // Update the confirmStudyGuideBtn click handler to include the current content
-        document.getElementById('confirmStudyGuideBtn').addEventListener('click', function() {
+        // Client-side JavaScript Fix
+        document.getElementById('confirmStudyGuideBtn').addEventListener('click', async function() {
             const button = this;
-            const isManualMode = !document.getElementById('manualTab').classList.contains('hidden');
-            const isAITextMode = !document.getElementById('aiTextInputMenu').classList.contains('hidden');
-            let apiUrl = isManualMode ? `/study-guides/${window.currentGuideId}` : `/study-guides/ai/${window.currentGuideId}`;
+            const elements = {
+                manualTab: document.getElementById('manualTab'),
+                aiTextInputMenu: document.getElementById('aiTextInputMenu'),
+                fileUploadMenu: document.getElementById('fileUploadMenu'),
+                studyGuideContent: document.getElementById('studyGuideContent'),
+                aiTextBox: document.getElementById('aiTextBox'),
+                fileInput: document.getElementById('fileInput')
+            };
 
-            
+            const isManualMode = !elements.manualTab.classList.contains('hidden');
+            const isAITextMode = !elements.aiTextInputMenu.classList.contains('hidden');
+            const isFileUploadMode = !elements.fileUploadMenu.classList.contains('hidden');
+
             // Ensure a study guide is currently selected
             if (!window.currentGuideId) {
                 alert("Please select a study guide first.");
                 return;
             }
-            
-            let content = "";
-            
-            if (isManualMode) {
-                content = studyGuideContent.value;
-                if (!content.trim()) {
-                    alert('Please enter content for your study guide.');
-                    return;
-                }
-            } else {
-                if (isAITextMode) {
-                    content = document.getElementById('aiTextBox').value;
-                    if (!content.trim()) {
-                        alert('Please enter text for the AI to process.');
-                        return;
-                    }
-                } else {
-                    // AI file upload mode handling (similar validation can be applied)
-                    const file = document.getElementById('fileInput').files[0];
-                    if (!file) {
-                        alert('Please upload a file for the AI to process.');
-                        return;
-                    }
-                    // For simplicity, assume that AI file processing will eventually provide a content string.
-                    // You could add further logic here to process the file.
-                }
-            }
-            
-            // Disable the button and show a loading state (optional)
+
+            // Show loading state
             button.disabled = true;
-            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
-            button.style.opacity = '0.7';
-            
-            // Now update the existing study guide via a PUT request
-            fetch(apiUrl, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    content: content,
-                    // Optionally include title if you want to update it as well:
-                    // title: document.getElementById('guideNameHeader').textContent
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.message === "Study guide updated!") {
-                    // Reset the button state and close the modal
-                    button.disabled = false;
-                    button.innerHTML = 'Create';
-                    button.style.opacity = '1';
-                    window.closeLargeCreateModal();
+            button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            try {
+                let apiUrl = isManualMode ? `/study-guides/${window.currentGuideId}` : `/study-guides/ai/${window.currentGuideId}`;
+                let response;
+
+                if (isManualMode) {
+                    const content = elements.studyGuideContent.value.trim();
+                    if (!content) {
+                        alert('Please enter content for your study guide.');
+                        throw new Error('Empty content');
+                    }
                     
-                    // Update the PDF viewer with the new PDF from the updated study guide
-                    if (window.currentGuideId) {
-                        const container = document.getElementById("studyGuideContainer");
-                        container.innerHTML = `
-                            <div class="pdf-viewer">
-                                <embed src="/study-guides/${window.currentGuideId}/pdf" type="application/pdf" width="100%" height="600px">
-                            </div>`;
+                    response = await fetch(apiUrl, {
+                        method: "PUT",
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content: content })
+                    });
+                } else if (isAITextMode) {
+                    const content = elements.aiTextBox.value.trim();
+                    if (!content) {
+                        alert('Please enter text for the AI to process.');
+                        throw new Error('Empty AI text');
+                    }
+                    
+                    response = await fetch(apiUrl, {
+                        method: "PUT",
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ content: content })
+                    });
+                } else if (isFileUploadMode) {
+                    if (!window.uploadedFiles || window.uploadedFiles.length === 0) {
+                        alert('Please upload a file for the AI to process.');
+                        throw new Error('No file uploaded');
+                    }
+                    
+                    // Process each uploaded file
+                    for (const file of window.uploadedFiles) {
+                        const formData = new FormData();
+                        formData.append("file", file);
                         
-                        // Update the status in both columns
-                        document.getElementById("guideStatusHeader").textContent = "PDF Available";
-                        const guideStatusElement = document.querySelector(`[data-guide-id='${window.currentGuideId}'] .guide-status`);
-                        if (guideStatusElement) {
-                            guideStatusElement.textContent = "PDF Available";
+                        response = await fetch(apiUrl, {
+                            method: "PUT",
+                            body: formData
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Failed to process file: ${file.name}`);
                         }
                     }
-                } else {
-                    throw new Error(data.message || "Failed to update study guide");
                 }
-            })
-            .catch(error => {
-                console.error("Error updating study guide:", error);
-                alert("Failed to update study guide: " + error.message);
-                // Reset the button state
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to update study guide');
+                }
+
+                const data = await response.json();
+                
+                // Handle successful response
+                window.closeLargeCreateModal();
+
+                // Update the PDF viewer with the new PDF
+                if (window.currentGuideId) {
+                    const container = document.getElementById("studyGuideContainer");
+                    container.innerHTML = `
+                        <div class="pdf-viewer">
+                            <embed src="/study-guides/${window.currentGuideId}/pdf" type="application/pdf" width="100%" height="600px">
+                        </div>`;
+
+                    // Update the status in both columns
+                    document.getElementById("guideStatusHeader").textContent = "PDF Available";
+                    const guideStatusElement = document.querySelector(`[data-guide-id='${window.currentGuideId}'] .guide-status`);
+                    if (guideStatusElement) {
+                        guideStatusElement.textContent = "PDF Available";
+                    }
+                }
+                        
+            } catch (error) {
+                console.error("Error processing study guide:", error);
+                alert(error.message || "An error occurred while processing your request.");
+            } finally {
+                // Reset button state
                 button.disabled = false;
                 button.innerHTML = 'Create';
-                button.style.opacity = '1';
-            });
+            }
         });
-
 
         function resetButton() {
             const button = document.getElementById('confirmStudyGuideBtn');

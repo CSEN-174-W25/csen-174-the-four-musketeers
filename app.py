@@ -20,7 +20,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 
-
 GEMINI_API_KEY = "AIzaSyCthF-5gqz4JIgMqlwyRSuV0EVttxRjaNg"
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -580,11 +579,10 @@ def update_ai_study_guide(current_user, guide_id):
             return jsonify({'message': 'Study guide not found or unauthorized'}), 404
         
         content = None
-        data = request.get_json(silent=True)  # Avoid error if request is not JSON
-        title = request.form.get('title') if request.form else (data.get('title') if data else study_guide.title)
+        title = study_guide.title  # Default to existing title
         
-        # Handle file upload
-        if 'file' in request.files:
+        # Check if the request contains a file
+        if request.files and 'file' in request.files:
             file = request.files['file']
             if file.filename == '':
                 return jsonify({'message': 'No file selected'}), 400
@@ -670,20 +668,32 @@ def update_ai_study_guide(current_user, guide_id):
                     # Try using textract as a fallback for other file types
                     try:
                         content = textract.process(io.BytesIO(file_content), extension=file_ext[1:]).decode('utf-8')
-                    except:
-                        return jsonify({'message': 'Unsupported file type. Please upload a text file, PDF, Word document, Excel file, PowerPoint, or image.'}), 400
+                    except Exception as e:
+                        return jsonify({'message': f'Unsupported file type: {str(e)}'}), 400
                     
             except Exception as e:
                 return jsonify({'message': f'Error reading file: {str(e)}'}), 400
-        # Handle text content
-        else:
-            data = request.get_json()
-            if not data or 'content' not in data:
-                return jsonify({'message': 'Content is required for AI-generated study guide'}), 400
-        content = data.get('content')
 
+        # Check for JSON content
+        elif request.is_json:
+            data = request.get_json()
+            if data and 'content' in data:
+                content = data.get('content')
+                if 'title' in data:
+                    title = data.get('title')
+            else:
+                return jsonify({'message': 'Content is required for AI-generated study guide'}), 400
+                
+        # Check for form data
+        elif request.form:
+            if 'content' in request.form:
+                content = request.form.get('content')
+            if 'title' in request.form:
+                title = request.form.get('title')
+        
+        # Ensure we have content to process
         if not content:
-            return jsonify({'message': 'No content to process'}), 400
+            return jsonify({'message': 'No content provided'}), 400
 
         # Generate study guide content using Gemini
         prompt = f"""Create a comprehensive and well-structured study guide from the following content. 
@@ -701,28 +711,38 @@ Content to process:
 
 Please ensure the study guide is educational, easy to follow, and retains all important information from the source content."""
 
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=prompt,
-        )
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+            )
+            
+            study_guide_content = response.text.strip()
+        except Exception as e:
+            return jsonify({'message': f'Error generating content with AI: {str(e)}'}), 500
         
-        study_guide_content = response.text.strip()
-        
-        # Generate PDF data
-        pdf_data = generate_pdf_from_content(study_guide_content)
-        
-        # Update existing study guide
-        study_guide.title = title
-        study_guide.content = study_guide_content
-        study_guide.pdf_data = pdf_data
-        db.session.commit()
-        
-        return jsonify({'message': 'Study guide updated!'}), 200
+        try:
+            # Generate PDF data
+            pdf_data = generate_pdf_from_content(study_guide_content)
+            
+            # Update existing study guide
+            study_guide.title = title
+            study_guide.content = study_guide_content
+            study_guide.pdf_data = pdf_data
+            db.session.commit()
+            
+            return jsonify({'message': 'Study guide updated!', 'content': study_guide_content}), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'message': f'Failed to save study guide: {str(e)}'}), 500
     
     except Exception as e:
         db.session.rollback()
         return jsonify({'message': f'Failed to update study guide: {str(e)}'}), 500
-
+        # If debugging, you might want to print the full traceback
+        # import traceback
+        # traceback.print_exc()
+        
 @app.route('/study-guides/<string:guide_id>', methods=['GET'])
 @token_required
 def get_study_guide(current_user, guide_id):
