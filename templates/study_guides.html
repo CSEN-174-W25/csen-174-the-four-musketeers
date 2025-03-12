@@ -21,7 +21,7 @@
                             <li class="study-guide-item" data-guide-id="{{ guide.id }}">
                                 <div class="guide-info" onclick="openGuide('{{ guide.id }}')">
                                     <span class="guide-name">{{ guide.name }}</span>
-                                    <small class="guide-status">{% if guide.has_pdf %}PDF Available{% else %}No PDF{% endif %}</small>
+                                    <small class="guide-status">{% if guide.content %}PDF Available{% else %}No PDF{% endif %}</small>
                                 </div>
                                 <button class="menu-btn" onclick="toggleMenu(event, '{{ guide.id }}')">
                                     <i class="fas fa-ellipsis-v"></i>
@@ -328,10 +328,10 @@
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById("guideStatusHeader").textContent = 
-                        data.study_guide.has_pdf ? "PDF Available" : "No PDF";
+                        data.study_guide.content ? "PDF Available" : "No PDF";
                     const container = document.getElementById("studyGuideContainer");
                     
-                    if (data.study_guide.has_pdf) {
+                    if (data.study_guide.content) {
                         // Display PDF viewer
                         container.innerHTML = `
                             <div class="pdf-viewer">
@@ -339,7 +339,7 @@
                             </div>`;
                     } else {
                         container.innerHTML = `
-                            <p class="text-center text-muted">No PDF available for this study guide. Click Create to generate one.</p>`;
+                            <p class="text-center text-muted">No PDF available for this study guide. Click Create PDF to generate one.</p>`;
                     }
                 })
                 .catch(error => console.error("Error fetching study guide:", error));

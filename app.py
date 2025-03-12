@@ -565,7 +565,12 @@ def create_study_guide(current_user):
     data = request.get_json()
     if not data or 'title' not in data:
         return jsonify({'message': 'Missing title field'}), 400
-    new_guide = StudyGuide(title=data['title'], content='', user_id=current_user.id)
+    # Use the provided manual input for content (if any)
+    new_guide = StudyGuide(
+        title=data['title'],
+        content=data.get('content', ''),  # Updated to include manual input
+        user_id=current_user.id
+    )
     db.session.add(new_guide)
     db.session.commit()
     return jsonify({'message': 'Study guide created!', 'guide_id': new_guide.id}), 201
@@ -1025,8 +1030,7 @@ def handle_study_guide_pdf(current_user, guide_id):
     
     if request.method == 'DELETE':
         try:
-            guide.pdf_data = None
-            guide.has_pdf = False
+            guide.content = ""
             db.session.commit()
             return jsonify({'message': 'PDF deleted!'}), 200
         except Exception as e:
@@ -1035,7 +1039,6 @@ def handle_study_guide_pdf(current_user, guide_id):
     
     # GET method
     if not guide.pdf_data:
-        # Generate PDF if it doesn't exist
         try:
             pdf_data = generate_pdf_from_content(guide.content)
             guide.pdf_data = pdf_data
