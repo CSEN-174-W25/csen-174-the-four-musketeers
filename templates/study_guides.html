@@ -54,7 +54,6 @@
                     <div id="guideHeaderRight" class="guide-header-right">
                         <button id="createButton" class="btn btn-success header-btn">Create PDF</button>
                         <button id="deleteButton" class="btn btn-danger header-btn">Delete PDF</button>
-                        <button id="studyButton" class="btn btn-primary header-btn">Study</button>
                     </div>
                 </div>
                 
@@ -170,17 +169,6 @@
                 <button class="tab-btn" data-tab="ai">AI</button>
             </div>
             <button id="confirmStudyGuideBtn" class="btn btn-success">Create</button>
-        </div>
-    </div>
-</div>
-
-<!-- PDF Study Mode Modal -->
-<div id="pdfStudyModal" class="modal pdf-study-modal">
-    <div class="modal-content pdf-study-content">
-        <button id="closePdfStudyModalBtn" class="close-btn">&times;</button>
-        <div class="pdf-study-viewer">
-            <!-- The embed will be updated dynamically -->
-            <embed id="pdfStudyEmbed" src="" type="application/pdf" width="100%" height="100%">
         </div>
     </div>
 </div>
@@ -873,32 +861,6 @@
                 });
             }
         });
-    });
-
-    document.getElementById("studyButton").addEventListener("click", function() {
-        // Check if a study guide is selected
-        if (!window.currentGuideId) {
-            alert("Please select a study guide first.");
-            return;
-        }
-
-        // Verify that a PDF is available
-        const status = document.getElementById("guideStatusHeader").textContent;
-        if (status !== "PDF Available") {
-            alert("No PDF available for this study guide to study.");
-            return;
-        }
-
-        // Set the source of the embed in the modal to the PDF URL
-        const pdfEmbed = document.getElementById("pdfStudyEmbed");
-        pdfEmbed.src = `/study-guides/${window.currentGuideId}/pdf`;
-
-        // Open the PDF study modal (display it as flex, adjust as per your CSS)
-        document.getElementById("pdfStudyModal").style.display = "flex";
-    });
-
-    document.getElementById("closePdfStudyModalBtn").addEventListener("click", function() {
-        document.getElementById("pdfStudyModal").style.display = "none";
     });
 
 </script>
