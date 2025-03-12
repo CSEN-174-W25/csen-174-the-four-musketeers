@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect, url_for, render_template, send_file
+from flask import Flask, request, jsonify, redirect, url_for, render_template, send_file, make_response
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 import jwt
@@ -181,22 +181,19 @@ def login():
     response.set_cookie("token", token, httponly=True)
     return response
 
-@app.route('/logout', methods=['POST'])
+
+@app.route('/logout', methods=['GET'])
 @token_required
 def logout(current_user):
-    response = jsonify({'message': 'Logged out successfully!'})
+    response = make_response(redirect(url_for('index')))
     response.delete_cookie("token")
-    return response, 200
+    return response
+
 
 @app.route('/dashboard', methods=['GET'])
 @token_required
 def dashboard(current_user):
     return render_template('dashboard.html', user=current_user)
-
-@app.route('/get-user-info', methods=['GET'])
-@token_required
-def get_user_info(current_user):
-    return jsonify({'username': current_user.username})
 
 # ============================
 #     Flashcard Endpoints
@@ -750,127 +747,6 @@ def delete_study_guide(current_user, guide_id):
     db.session.commit()
     return jsonify({'message': 'Study guide deleted!'})
 
-@app.route('/api/generate-flashcards', methods=['POST'])
-@token_required
-def generate_flashcards(current_user):
-    """Generate flashcards using Gemini AI from text content."""
-    data = request.get_json()
-    content = data.get('content')
-    num_flashcards = data.get('count', 5)
-
-    if not content:
-        return jsonify({'message': 'Content is required for AI-generated flashcards'}), 400
-
-    try:
-        # Generate flashcards using Google Gemini AI
-        prompt = f"""Generate {num_flashcards} high-quality flashcards based on this content:
-        
-{content}
-
-Return an array of JSON objects in this exact format:
-[
-    {{"question": "What is the capital of France?", "answer": "Paris"}},
-    {{"question": "What is 2+2?", "answer": "4"}}
-]
-
-Make the questions clear and concise, and the answers detailed but focused. Ensure the content is accurate and educational. Do not include any additional text or formatting, only the JSON array."""
-
-        response = genai.generate_text(prompt)
-        ai_flashcards = response.text
-
-        # Parse AI-generated text into flashcards
-        flashcards = []
-        try:
-            # Try to parse as JSON first
-            cards_data = json.loads(ai_flashcards)
-            for card in cards_data:
-                flashcards.append({
-                    'question': card['question'],
-                    'answer': card['answer']
-                })
-        except json.JSONDecodeError:
-            # Fallback to line-by-line parsing
-            for line in ai_flashcards.strip().split("\n"):
-                if ":" in line:
-                    question, answer = line.split(":", 1)
-                    flashcards.append({
-                        'question': question.strip(),
-                        'answer': answer.strip()
-                    })
-
-        if not flashcards:
-            return jsonify({'message': 'Could not generate valid flashcards. Try different content.'}), 500
-
-        return jsonify({
-            'message': 'Flashcards generated successfully',
-            'flashcards': flashcards
-        }), 200
-
-    except Exception as e:
-        return jsonify({'message': f'AI generation failed: {str(e)}'}), 500
-
-@app.route('/api/process-file', methods=['POST'])
-@token_required
-def process_file(current_user):
-    """Process uploaded files and generate flashcards using Gemini AI."""
-    if 'file' not in request.files:
-        return jsonify({'message': 'No file uploaded'}), 400
-
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({'message': 'No file selected'}), 400
-
-    try:
-        # Read file content
-        content = file.read().decode('utf-8')
-        
-        # Generate flashcards using the file content
-        num_flashcards = request.form.get('count', 5)
-        prompt = f"""Generate {num_flashcards} high-quality flashcards based on this content:
-        
-{content}
-
-Return an array of JSON objects in this exact format:
-[
-    {{"question": "What is the capital of France?", "answer": "Paris"}},
-    {{"question": "What is 2+2?", "answer": "4"}}
-]
-
-Make the questions clear and concise, and the answers detailed but focused. Ensure the content is accurate and educational. Do not include any additional text or formatting, only the JSON array."""
-
-        response = genai.generate_text(prompt)
-        ai_flashcards = response.text
-
-        # Parse AI-generated text into flashcards
-        flashcards = []
-        try:
-            # Try to parse as JSON first
-            cards_data = json.loads(ai_flashcards)
-            for card in cards_data:
-                flashcards.append({
-                    'question': card['question'],
-                    'answer': card['answer']
-                })
-        except json.JSONDecodeError:
-            # Fallback to line-by-line parsing
-            for line in ai_flashcards.strip().split("\n"):
-                if ":" in line:
-                    question, answer = line.split(":", 1)
-                    flashcards.append({
-                        'question': question.strip(),
-                        'answer': answer.strip()
-                    })
-
-        if not flashcards:
-            return jsonify({'message': 'Could not generate valid flashcards from file.'}), 500
-
-        return jsonify({
-            'message': 'Flashcards generated successfully',
-            'flashcards': flashcards
-        }), 200
-
-    except Exception as e:
-        return jsonify({'message': f'File processing failed: {str(e)}'}), 500
 
 def generate_pdf_from_content(content):
     """Helper function to generate a PDF from text content with proper styling."""
@@ -974,43 +850,6 @@ def generate_pdf_from_content(content):
     buffer.seek(0)
     return buffer.getvalue()  # Return the binary PDF data
 
-@app.route('/study-guides/create', methods=['POST'])
-@token_required
-def create_study_guide_with_pdf(current_user):
-    data = request.get_json()
-    if not data or 'content' not in data:
-        return jsonify({'message': 'Missing content'}), 400
-    
-    try:
-        # Generate a title from the first line or first few words
-        content = data['content'].strip()
-        title = content.split('\n')[0][:30] if '\n' in content else content[:30]
-        
-        # Create new study guide
-        new_guide = StudyGuide(
-            title=title,
-            content=content,
-            user_id=current_user.id,
-        )
-        db.session.add(new_guide)
-        db.session.commit()
-        
-        # Generate and save PDF
-        pdf_buffer = generate_pdf_from_content(content)
-        pdf_path = os.path.join('static', 'pdfs', f'{new_guide.id}.pdf')
-        os.makedirs(os.path.dirname(pdf_path), exist_ok=True)
-        
-        with open(pdf_path, 'wb') as f:
-            f.write(pdf_buffer)
-        
-        return jsonify({
-            'message': 'Study guide created!',
-            'guide_id': new_guide.id,
-        }), 201
-        
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'message': f'Failed to create study guide: {str(e)}'}), 500
 
 @app.route('/study-guides/<string:guide_id>/pdf', methods=['GET', 'DELETE'])
 @token_required
