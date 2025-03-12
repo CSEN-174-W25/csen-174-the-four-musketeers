@@ -21,7 +21,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Paragraph
 
 
-GEMINI_API_KEY = "AIzaSyCthF-5gqz4JIgMqlwyRSuV0EVttxRjaNg"
+GEMINI_API_KEY = ""
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 app = Flask(__name__)
